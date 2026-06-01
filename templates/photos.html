@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}照片墙 · 我们的小窝{% endblock %}
+
+{% block content %}
+<main class="page">
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title page-title-left">照片墙</h1>
+        <p class="page-sub page-sub-left">记录我们一起的每一个画面</p>
+      </div>
+      {% if user %}
+      <button type="button" class="btn btn-primary" data-open-modal="modal-upload-photo">+ 上传照片</button>
+      {% endif %}
+    </div>
+
+    <!-- 心形照片墙（进入页面直接看到内容） -->
+    <section class="heart-section">
+      {% if photos %}
+      <div class="heart-wall" id="heart-wall">
+        {% for photo in photos[:24] %}
+        <div
+          class="heart-cell heart-cell-{{ loop.index }}"
+          data-lightbox
+          data-src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+          title="{{ photo.uploader }} · {{ photo.created_at }}"
+        >
+          <img
+            src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+            alt="我们的照片"
+            loading="lazy"
+          >
+        </div>
+        {% endfor %}
+      </div>
+      {% if photos|length > 24 %}
+      <p class="heart-more-label">更多回忆</p>
+      <div class="photo-grid photo-grid-extra">
+        {% for photo in photos[24:] %}
+        <div>
+          <div
+            class="photo-item"
+            data-lightbox
+            data-src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+          >
+            <img
+              src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+              alt="我们的照片"
+              loading="lazy"
+            >
+          </div>
+          <p class="photo-meta">{{ photo.uploader }} · {{ photo.created_at }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="card text-center heart-empty">
+        <p style="font-size:2rem;margin-bottom:0.5rem;">♥</p>
+        <p style="color:var(--text-light);">还没有照片，点击右上角上传第一张吧～</p>
+      </div>
+      {% endif %}
+    </section>
+  </div>
+</main>
+
+<!-- 上传照片弹窗 -->
+{% if user %}
+<div class="modal-overlay" id="modal-upload-photo" aria-hidden="true">
+  <div class="modal" role="dialog" aria-labelledby="modal-photo-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-photo-title">上传照片</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="关闭">×</button>
+    </div>
+    <form
+      method="post"
+      action="{{ url_for('upload_photo') }}"
+      enctype="multipart/form-data"
+      id="upload-form"
+    >
+      <div class="modal-body">
+        <label class="label" for="photo-input">选择本地图片（单张，最大 8MB）</label>
+        <input
+          class="input"
+          type="file"
+          id="photo-input"
+          name="photo"
+          accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+          required
+        >
+        <div class="preview-box" id="photo-preview">
+          <p class="label mt-2">预览</p>
+          <img id="preview-img" alt="预览">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>取消</button>
+        <button type="submit" class="btn btn-primary">上传并展示</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- 灯箱放大 -->
+<div class="lightbox" id="lightbox">
+  <button type="button" class="lightbox-close" id="lightbox-close" aria-label="关闭">×</button>
+  <img id="lightbox-img" alt="放大查看">
+</div>
+{% endblock %}

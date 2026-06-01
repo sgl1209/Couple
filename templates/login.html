@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 · 我们的小窝</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card card card-pink">
+      <div class="login-heart">💕</div>
+      <h1 class="page-title" style="margin-bottom:0.25rem;">我们的小窝</h1>
+      <p class="page-sub" style="margin-bottom:1.5rem;">仅我们俩可以进入哦</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      {% for category, message in messages %}
+      <div class="flash flash-{{ category }} mb-4">{{ message }}</div>
+      {% endfor %}
+      {% endif %}
+      {% endwith %}
+
+      <form method="post" action="{{ url_for('login') }}">
+        <div class="mb-4">
+          <label class="label" for="username">账号</label>
+          <select class="select" id="username" name="username" required>
+            <option value="">请选择</option>
+            {% for name in users %}
+            <option value="{{ name }}">{{ name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="label" for="password">密码</label>
+          <input
+            class="input"
+            type="password"
+            id="password"
+            name="password"
+            placeholder="请输入密码"
+            required
+            autocomplete="current-password"
+          >
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">进入小窝</button>
+      </form>
+      <p class="text-center mt-4" style="font-size:0.8rem;color:var(--text-light);">
+        账号密码在 app.py 的 USERS 中修改
+      </p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}首页 · 我们的小窝{% endblock %}
+
+{% block content %}
+<main class="page">
+  <div class="container">
+    <h1 class="page-title">我们在一起的日子</h1>
+    <p class="page-sub">每一天都值得被记住</p>
+
+    <!-- 相恋计时 -->
+    <section class="card card-pink mb-6" id="love-timer">
+      <div class="timer-box">
+        <p class="timer-label">从 {{ love_start }} 相爱至今</p>
+        <div class="timer-units">
+          <div class="timer-unit">
+            <strong id="love-days">0</strong>
+            <span>天</span>
+          </div>
+          <div class="timer-unit">
+            <strong id="love-hours">00</strong>
+            <span>时</span>
+          </div>
+          <div class="timer-unit">
+            <strong id="love-mins">00</strong>
+            <span>分</span>
+          </div>
+          <div class="timer-unit">
+            <strong id="love-secs">00</strong>
+            <span>秒</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 纪念日倒计时 -->
+    <section class="card mb-6" id="anniversary-countdown">
+      <div class="timer-box py-4">
+        <p class="timer-label" id="anni-label">距离下一个纪念日还有</p>
+        <p class="timer-number"><span id="anni-days">0</span> <span style="font-size:1.25rem;">天</span></p>
+        <p class="timer-label mt-2">纪念日：{{ anniversary }}（每年循环）</p>
+      </div>
+    </section>
+
+    <!-- 恋爱时光轴 -->
+    <section>
+      <h2 class="page-title" style="font-size:1.35rem;">恋爱时光轴</h2>
+      <p class="page-sub">那些闪闪发光的瞬间</p>
+      <div class="card">
+        {% if events %}
+        <div class="timeline">
+          {% for event in events %}
+          <article class="timeline-item">
+            <div class="flex justify-between items-center flex-wrap gap-2">
+              <time class="timeline-date">{{ event.event_date }}</time>
+              <form method="post" action="{{ url_for('delete_timeline', event_id=event.id) }}" class="timeline-delete-form">
+                <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('确定删除这条时光轴吗？')">删除</button>
+              </form>
+            </div>
+            <h3 class="timeline-title">{{ event.title }}</h3>
+            <p>{{ event.content }}</p>
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-center" style="color:var(--text-light);">时光轴还是空的，请编辑 <code>data/timeline.json</code> 添加事件～</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</main>
+{% endblock %}

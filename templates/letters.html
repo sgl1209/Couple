@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}情书墙 · 我们的小窝{% endblock %}
+
+{% block content %}
+<main class="page">
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title page-title-left">情书墙</h1>
+        <p class="page-sub page-sub-left">把心里话写在这里</p>
+      </div>
+      {% if user %}
+      <button type="button" class="btn btn-primary" data-open-modal="modal-publish-letter">+ 写情书</button>
+      {% endif %}
+    </div>
+
+    <!-- 情书列表（进入页面直接看到内容） -->
+    <section>
+      {% if letters %}
+      {% for letter in letters %}
+      <article class="card letter-card">
+        <h2 class="letter-title">{{ letter.title }}</h2>
+        <div class="letter-content">{{ letter.content }}</div>
+        <footer class="letter-meta">
+          {{ letter.author }} · {{ letter.created_at }}
+        </footer>
+      </article>
+      {% endfor %}
+      {% else %}
+      <div class="card text-center" style="padding:2rem;color:var(--text-light);">
+        还没有情书，点击右上角写下第一封吧～
+      </div>
+      {% endif %}
+    </section>
+  </div>
+</main>
+
+<!-- 发布情书弹窗 -->
+{% if user %}
+<div class="modal-overlay" id="modal-publish-letter" aria-hidden="true">
+  <div class="modal" role="dialog" aria-labelledby="modal-letter-title">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-letter-title">发布情书</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="关闭">×</button>
+    </div>
+    <form method="post" action="{{ url_for('publish_letter') }}">
+      <div class="modal-body">
+        <div class="mb-4">
+          <label class="label" for="letter-title">标题</label>
+          <input
+            class="input"
+            type="text"
+            id="letter-title"
+            name="title"
+            placeholder="给这封信起个名字"
+            maxlength="100"
+            required
+          >
+        </div>
+        <div class="mb-4">
+          <label class="label" for="letter-content">内容</label>
+          <textarea
+            class="textarea"
+            id="letter-content"
+            name="content"
+            placeholder="写下你想说的话…"
+            required
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>取消</button>
+        <button type="submit" class="btn btn-primary">发布情书</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

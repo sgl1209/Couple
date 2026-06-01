@@ -1,0 +1,333 @@
+# -*- coding: utf-8 -*-
+"""
+情侣互动网站 - 主程序
+技术栈：Flask + SQLite + 会话登录
+运行：python app.py  访问 http://127.0.0.1:5000
+"""
+
+import json
+import os
+import sqlite3
+from datetime import datetime
+from functools import wraps
+
+from flask import (
+    Flask,
+    flash,
+    g,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
+# ========== 基础配置（可按需修改）==========
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE = os.path.join(BASE_DIR, "site.db")
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
+TIMELINE_FILE = os.path.join(BASE_DIR, "data", "timeline.json")
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+# 相恋开始日期、纪念日（修改这里即可）
+LOVE_START_DATE = "2026-05-28"
+ANNIVERSARY_DATE = "2026-05-28"
+
+# 两个固定账号（请改成你们的账号密码）
+USERS = {
+    "二三": {"password": "loveyy", "display_name": "二三"},
+    "小六": {"password": "lovedfs", "display_name": "小六"},
+}
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "couple-secret-key-change-me-in-production"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 单张最大 8MB
+
+
+# ========== 数据库 ==========
+def get_db():
+    """获取当前请求的数据库连接"""
+    if "db" not in g:
+        g.db = sqlite3.connect(DATABASE)
+        g.db.row_factory = sqlite3.Row
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(_exc):
+    """请求结束关闭连接"""
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
+
+
+def init_db():
+    """自动建表并初始化账号"""
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    db = sqlite3.connect(DATABASE)
+    db.row_factory = sqlite3.Row
+    cur = db.cursor()
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            uploader TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS letters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            author TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    # 初始化两个固定用户
+    for username, info in USERS.items():
+        row = cur.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if row is None:
+            cur.execute(
+                "INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)",
+                (
+                    username,
+                    generate_password_hash(info["password"]),
+                    info["display_name"],
+                ),
+            )
+
+    db.commit()
+    db.close()
+
+
+# ========== 工具函数 ==========
+def allowed_file(filename):
+    """检查是否为允许的图片格式"""
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def load_timeline():
+    """从 data/timeline.json 读取时光轴，按日期倒序"""
+    if not os.path.exists(TIMELINE_FILE):
+        return []
+    try:
+        with open(TIMELINE_FILE, "r", encoding="utf-8") as f:
+            events = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(events, list):
+        return []
+    return sorted(events, key=lambda x: x.get("event_date", ""), reverse=True)
+
+
+def save_timeline(events):
+    """保存时光轴到 data/timeline.json"""
+    os.makedirs(os.path.dirname(TIMELINE_FILE), exist_ok=True)
+    with open(TIMELINE_FILE, "w", encoding="utf-8") as f:
+        json.dump(events, f, ensure_ascii=False, indent=2)
+
+
+def load_timeline_raw():
+    """读取未排序的原始列表（用于增删改后写回）"""
+    if not os.path.exists(TIMELINE_FILE):
+        return []
+    try:
+        with open(TIMELINE_FILE, "r", encoding="utf-8") as f:
+            events = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+    return events if isinstance(events, list) else []
+
+
+def login_required(view):
+    """登录装饰器"""
+
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            flash("请先登录～", "warning")
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def current_user():
+    """当前登录用户信息"""
+    if not session.get("user_id"):
+        return None
+    db = get_db()
+    return db.execute(
+        "SELECT id, username, display_name FROM users WHERE id = ?",
+        (session["user_id"],),
+    ).fetchone()
+
+
+# ========== 路由 ==========
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """登录页"""
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        db = get_db()
+        user = db.execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if user and check_password_hash(user["password_hash"], password):
+            session["user_id"] = user["id"]
+            session["username"] = user["username"]
+            session["display_name"] = user["display_name"]
+            flash(f"欢迎回来，{user['display_name']}～", "success")
+            return redirect(url_for("index"))
+        flash("账号或密码错误", "error")
+
+    return render_template("login.html", users=list(USERS.keys()))
+
+
+@app.route("/logout")
+def logout():
+    """退出登录"""
+    session.clear()
+    flash("已退出登录，下次见～", "info")
+    return redirect(url_for("login"))
+
+
+@app.route("/")
+@login_required
+def index():
+    """主页：相恋计时、纪念日倒计时、时光轴（需登录）"""
+    events = load_timeline()
+    user = current_user()
+    return render_template(
+        "index.html",
+        user=user,
+        love_start=LOVE_START_DATE,
+        anniversary=ANNIVERSARY_DATE,
+        events=events,
+    )
+
+
+@app.route("/photos")
+@login_required
+def photos():
+    """照片墙（需登录查看与上传）"""
+    db = get_db()
+    photo_list = db.execute(
+        "SELECT * FROM photos ORDER BY created_at DESC"
+    ).fetchall()
+    return render_template("photos.html", user=current_user(), photos=photo_list)
+
+
+@app.route("/photos/upload", methods=["POST"])
+@login_required
+def upload_photo():
+    """上传照片"""
+    if "photo" not in request.files:
+        flash("请选择一张图片", "warning")
+        return redirect(url_for("photos"))
+
+    file = request.files["photo"]
+    if file.filename == "":
+        flash("未选择文件", "warning")
+        return redirect(url_for("photos"))
+
+    if not allowed_file(file.filename):
+        flash("仅支持 png、jpg、jpeg、gif、webp", "error")
+        return redirect(url_for("photos"))
+
+    original = secure_filename(file.filename)
+    ext = original.rsplit(".", 1)[1].lower()
+    new_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{session['username']}.{ext}"
+    save_path = os.path.join(app.config["UPLOAD_FOLDER"], new_name)
+    file.save(save_path)
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO photos (filename, uploader, created_at) VALUES (?, ?, ?)",
+        (new_name, session["display_name"], datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    )
+    db.commit()
+    flash("照片上传成功～", "success")
+    return redirect(url_for("photos"))
+
+
+@app.route("/letters")
+@login_required
+def letters():
+    """情书墙（需登录查看与发布）"""
+    db = get_db()
+    letter_list = db.execute(
+        "SELECT * FROM letters ORDER BY created_at DESC"
+    ).fetchall()
+    return render_template("letters.html", user=current_user(), letters=letter_list)
+
+
+@app.route("/letters/publish", methods=["POST"])
+@login_required
+def publish_letter():
+    """发布情书"""
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "").strip()
+    if not title or not content:
+        flash("标题和内容都不能为空哦", "warning")
+        return redirect(url_for("letters"))
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO letters (title, content, author, created_at) VALUES (?, ?, ?, ?)",
+        (
+            title,
+            content,
+            session["display_name"],
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        ),
+    )
+    db.commit()
+    flash("情书发布成功～", "success")
+    return redirect(url_for("letters"))
+
+
+@app.route("/timeline/delete/<int:event_id>", methods=["POST"])
+@login_required
+def delete_timeline(event_id):
+    """删除一条时光轴事件（写回 JSON 文件）"""
+    events = load_timeline_raw()
+    new_events = [e for e in events if e.get("id") != event_id]
+    if len(new_events) == len(events):
+        flash("未找到该事件", "warning")
+    else:
+        save_timeline(new_events)
+        flash("已删除该时光轴事件", "success")
+    return redirect(url_for("index"))
+
+
+# ========== 启动 ==========
+if __name__ == "__main__":
+    init_db()
+    # host=0.0.0.0 便于轻量服务器外网访问；仅本机可改为 127.0.0.1
+    app.run(host="0.0.0.0", port=5000, debug=True)

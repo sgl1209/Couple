@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}我们的小窝{% endblock %}</title>
+  <!-- 本地样式，无 CDN 依赖 -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body
+  {% if love_start is defined %}data-love-start="{{ love_start }}"{% endif %}
+  {% if anniversary is defined %}data-anniversary="{{ anniversary }}"{% endif %}
+>
+  {% if show_nav is not defined or show_nav %}
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="{{ url_for('index') }}" class="nav-logo">♥ 我们的小窝</a>
+      <div class="nav-links">
+        <a href="{{ url_for('index') }}" data-nav>首页</a>
+        <a href="{{ url_for('photos') }}" data-nav>照片墙</a>
+        <a href="{{ url_for('letters') }}" data-nav>情书墙</a>
+        {% if user %}
+        <span class="text-center" style="font-size:0.85rem;color:var(--text-light);padding:0 0.5rem;">{{ user.display_name }}</span>
+        <a href="{{ url_for('logout') }}">退出登录</a>
+        {% else %}
+        <a href="{{ url_for('login') }}">登录</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+  {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flash-wrap">
+    {% for category, message in messages %}
+    <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
