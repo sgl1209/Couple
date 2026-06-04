@@ -21,34 +21,42 @@ Only Flask and Werkzeug are required.
 
 **Production deployment:**
 ```bash
-pip install gunicorn
-gunicorn -w 2 -b 0.0.0.0:5000 app:app
+pip install -r requirements.txt
+socketio.run(app, host='0.0.0.0', port=5000, debug=False)
 ```
-For server deployment, set `debug=False` in `app.py` before running.
+Or with gunicorn + eventlet:
+```bash
+pip install gunicorn eventlet
+gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:5000 app:app
+```
+For server deployment, set `debug=False` in `app.py` before running. SocketIO requires proper WebSocket transport support.
 
 ## Architecture & Data Flow
 
 ### Backend Structure
 - **app.py**: Single Flask application file containing all routes, database logic, and utility functions
-  - Routes: `/login`, `/logout`, `/`, `/photos`, `/letters`, `/timeline/delete`
-  - Database: SQLite with three tables (`users`, `photos`, `letters`)
+  - Routes: `/login`, `/logout`, `/`, `/photos`, `/letters`, `/secretdiary`, `/timeline/delete`
+  - Database: SQLite with four tables (`users`, `photos`, `letters`, `secretdiary`)
   - Timeline data: Stored in `data/timeline.json` (not in database)
+  - WebSocket: Real-time notifications via flask-socketio
 
 ### Data Storage
-- **SQLite database** (`site.db`): User accounts, photos metadata (filename, uploader, timestamp), and love letters
+- **SQLite database** (`site.db`): User accounts, photos metadata (filename, uploader, timestamp), love letters, and secret diary entries
 - **JSON file** (`data/timeline.json`): Timeline events (id, event_date, title, content) - primary source of truth for timeline data
 - **File system** (`static/uploads/`): Photo files with naming pattern `YYYYMMDDHHMMSS_username.ext`
 
 ### Frontend Structure
 - **Base template** (`templates/base.html`): Navigation, flash message display, data attributes for timers
-- **Page templates**: `login.html`, `index.html`, `photos.html`, `letters.html`
+- **Page templates**: `login.html`, `index.html`, `photos.html`, `letters.html`, `secretdiary.html`
 - **CSS** (`static/css/style.css`): Tailwind-style utility classes, no external dependencies
 - **JavaScript** (`static/js/main.js`): Timers (love duration counter, anniversary countdown), lightbox, modals, photo preview
+- **WebSocket client**: `secretdiary.html` includes socket.io client for real-time diary notifications
 
 ### Key Flows
 1. **Photo upload**: File saved to `static/uploads/` → metadata inserted into `photos` table → displayed via static route
 2. **Timeline management**: Data read from JSON → sorted by date (reverse) → displayed on index → deletion writes back to JSON
 3. **Session management**: Login stores user_id in Flask session → `login_required` decorator protects routes → logout clears session
+4. **Real-time notifications**: User publishes diary entry → backend broadcasts via `socketio.emit('new_diary')` → all connected clients receive and display instantly with browser notification
 
 ## Configuration
 Edit these in `app.py` (top section, lines 27-45):
@@ -68,12 +76,18 @@ Initial timeline events can be added to `data/timeline.json` before first run, o
 - Password hashing uses werkzeug.security
 - Both users are static (configured in code, not dynamically created)
 - All timestamps are stored in ISO format (YYYY-MM-DD HH:MM:SS)
+- WebSocket (SocketIO) broadcasts all diary entries to all connected clients simultaneously
+- Secret diary entries are automatically visible to both users via real-time push (no polling needed)
+- Browser notifications require user permission but provide instant visual/audio alerts
+- SocketIO library handles connection management, reconnection, and fallback transports
 
 ## Deployment Checklist
 Before pushing to production:
 1. Change `USERS` passwords and display names
 2. Change `SECRET_KEY` to a random string
 3. Populate `data/timeline.json` with initial events
-4. Set `debug=False` in the final `app.run()` call
+4. Set `debug=False` in the `socketio.run()` call
 5. Back up `site.db` and `static/uploads/` for existing deployments
 6. Ensure `static/uploads/` directory is writable by the web process
+7. Install and configure gunicorn + eventlet for production (supports WebSocket properly)
+8. Test WebSocket connectivity (visit secretdiary page in multiple browser tabs to verify real-time updates)
