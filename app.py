@@ -18,6 +18,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -27,9 +28,17 @@ from werkzeug.utils import secure_filename
 
 # ========== 基础配置（可按需修改）==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, "site.db")
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
-TIMELINE_FILE = os.path.join(BASE_DIR, "data", "timeline.json")
+DATA_DIR = os.environ.get("LOVE_DATA_DIR", "").strip()
+if DATA_DIR:
+    if not os.path.isabs(DATA_DIR):
+        DATA_DIR = os.path.join(BASE_DIR, DATA_DIR)
+    DATABASE = os.path.join(DATA_DIR, "site.db")
+    UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
+    TIMELINE_FILE = os.path.join(DATA_DIR, "timeline.json")
+else:
+    DATABASE = os.path.join(BASE_DIR, "site.db")
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
+    TIMELINE_FILE = os.path.join(BASE_DIR, "data", "timeline.json")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 # 相恋开始日期、纪念日（修改这里即可）
@@ -71,6 +80,7 @@ def close_db(_exc):
 def init_db():
     """自动建表并初始化账号"""
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(os.path.dirname(TIMELINE_FILE), exist_ok=True)
     db = sqlite3.connect(DATABASE)
     db.row_factory = sqlite3.Row
     cur = db.cursor()
@@ -302,6 +312,13 @@ def upload_photo():
     db.commit()
     flash("照片上传成功～", "success")
     return redirect(url_for("photos"))
+
+
+@app.route("/uploads/<path:filename>")
+@login_required
+def uploaded_file(filename):
+    """访问上传目录中的照片（支持独立数据目录）"""
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
 @app.route("/letters")

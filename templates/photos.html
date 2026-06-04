@@ -22,11 +22,11 @@
         <div
           class="heart-cell heart-cell-{{ loop.index }}"
           data-lightbox
-          data-src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+          data-src="{{ url_for('uploaded_file', filename=photo.filename) }}"
           title="{{ photo.uploader }} · {{ photo.created_at }}"
         >
           <img
-            src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+            src="{{ url_for('uploaded_file', filename=photo.filename) }}"
             alt="我们的照片"
             loading="lazy"
           >
@@ -41,10 +41,10 @@
           <div
             class="photo-item"
             data-lightbox
-            data-src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+            data-src="{{ url_for('uploaded_file', filename=photo.filename) }}"
           >
             <img
-              src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+              src="{{ url_for('uploaded_file', filename=photo.filename) }}"
               alt="我们的照片"
               loading="lazy"
             >
