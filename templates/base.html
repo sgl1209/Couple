@@ -20,6 +20,7 @@
         <a href="{{ url_for('index') }}" data-nav>首页</a>
         <a href="{{ url_for('photos') }}" data-nav>照片墙</a>
         <a href="{{ url_for('letters') }}" data-nav>情书墙</a>
+        <a href="{{ url_for('secretdiary') }}" data-nav>心事墙</a>
         {% if user %}
         <span class="text-center" style="font-size:0.85rem;color:var(--text-light);padding:0 0.5rem;">{{ user.display_name }}</span>
         <a href="{{ url_for('logout') }}">退出登录</a>

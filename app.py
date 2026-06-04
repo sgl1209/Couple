@@ -21,6 +21,7 @@ from flask import (
     session,
     url_for,
 )
+from flask_socketio import SocketIO, emit, disconnect, join_room, leave_room
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -45,6 +46,9 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "couple-secret-key-change-me-in-production"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 单张最大 8MB
+
+# 初始化 SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 # ========== 数据库 ==========
@@ -96,6 +100,16 @@ def init_db():
         CREATE TABLE IF NOT EXISTS letters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            author TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS secretdiary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             content TEXT NOT NULL,
             author TEXT NOT NULL,
             created_at TEXT NOT NULL
@@ -312,6 +326,66 @@ def publish_letter():
     return redirect(url_for("letters"))
 
 
+@app.route("/secretdiary")
+@login_required
+def secretdiary():
+    """心事墙（需登录）"""
+    db = get_db()
+    diary_list = db.execute(
+        "SELECT * FROM secretdiary ORDER BY created_at DESC"
+    ).fetchall()
+    return render_template("secretdiary.html", user=current_user(), diaries=diary_list)
+
+
+@app.route("/secretdiary/post", methods=["POST"])
+@login_required
+def post_secretdiary():
+    """发布心事"""
+    content = request.form.get("content", "").strip()
+    if not content:
+        flash("心事内容不能为空哦", "warning")
+        return redirect(url_for("secretdiary"))
+
+    db = get_db()
+    user = current_user()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    db.execute(
+        "INSERT INTO secretdiary (content, author, created_at) VALUES (?, ?, ?)",
+        (content, user["display_name"], now),
+    )
+    db.commit()
+    
+    # 通过 SocketIO 实时通知
+    diary_entry = {
+        "id": db.execute("SELECT last_insert_rowid()").fetchone()[0],
+        "content": content,
+        "author": user["display_name"],
+        "created_at": now,
+    }
+    socketio.emit(
+        "new_diary",
+        diary_entry,
+        broadcast=True,
+    )
+    
+    flash("心事发布成功～", "success")
+    return redirect(url_for("secretdiary"))
+
+
+@socketio.on("connect")
+def handle_connect():
+    """WebSocket 连接"""
+    if session.get("user_id"):
+        emit("response", {"data": "已连接"})
+
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    """WebSocket 断开连接"""
+    pass
+
+
 @app.route("/timeline/delete/<int:event_id>", methods=["POST"])
 @login_required
 def delete_timeline(event_id):
@@ -330,4 +404,4 @@ def delete_timeline(event_id):
 if __name__ == "__main__":
     init_db()
     # host=0.0.0.0 便于轻量服务器外网访问；仅本机可改为 127.0.0.1
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
