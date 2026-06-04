@@ -254,7 +254,21 @@ def photos():
     photo_list = db.execute(
         "SELECT * FROM photos ORDER BY created_at DESC"
     ).fetchall()
-    return render_template("photos.html", user=current_user(), photos=photo_list)
+    # 过滤出真实存在的照片，删除找不到的记录
+    valid_photos = []
+    invalid_photo_ids = []
+    for photo in photo_list:
+        photo_path = os.path.join(UPLOAD_FOLDER, photo["filename"])
+        if os.path.exists(photo_path):
+            valid_photos.append(photo)
+        else:
+            invalid_photo_ids.append(photo["id"])
+    # 删除不存在的照片数据库记录
+    if invalid_photo_ids:
+        placeholders = ",".join("?" * len(invalid_photo_ids))
+        db.execute(f"DELETE FROM photos WHERE id IN ({placeholders})", invalid_photo_ids)
+        db.commit()
+    return render_template("photos.html", user=current_user(), photos=valid_photos)
 
 
 @app.route("/photos/upload", methods=["POST"])
@@ -384,6 +398,63 @@ def handle_connect():
 def handle_disconnect():
     """WebSocket 断开连接"""
     pass
+
+
+@app.route("/timeline/add", methods=["POST"])
+@login_required
+def add_timeline():
+    """添加一条时光轴事件"""
+    event_date = request.form.get("event_date", "").strip()
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "").strip()
+
+    if not event_date or not title or not content:
+        flash("日期、标题和内容不能为空", "warning")
+        return redirect(url_for("index"))
+
+    events = load_timeline_raw()
+    # 找最大 ID
+    max_id = max((e.get("id", 0) for e in events), default=0)
+    new_event = {
+        "id": max_id + 1,
+        "event_date": event_date,
+        "title": title,
+        "content": content,
+    }
+    events.append(new_event)
+    save_timeline(events)
+    flash("时光轴事件添加成功～", "success")
+    return redirect(url_for("index"))
+
+
+@app.route("/timeline/edit/<int:event_id>", methods=["POST"])
+@login_required
+def edit_timeline(event_id):
+    """编辑一条时光轴事件"""
+    event_date = request.form.get("event_date", "").strip()
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "").strip()
+
+    if not event_date or not title or not content:
+        flash("日期、标题和内容不能为空", "warning")
+        return redirect(url_for("index"))
+
+    events = load_timeline_raw()
+    event_found = False
+    for event in events:
+        if event.get("id") == event_id:
+            event["event_date"] = event_date
+            event["title"] = title
+            event["content"] = content
+            event_found = True
+            break
+
+    if not event_found:
+        flash("未找到该事件", "warning")
+    else:
+        save_timeline(events)
+        flash("时光轴事件编辑成功～", "success")
+    return redirect(url_for("index"))
 
 
 @app.route("/timeline/delete/<int:event_id>", methods=["POST"])

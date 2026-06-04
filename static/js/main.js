@@ -123,6 +123,18 @@
     var closeBtn = document.getElementById("lightbox-close");
     if (!lightbox || !lightboxImg) return;
 
+    // 图片加载失败时隐藏破图
+    document.querySelectorAll(".heart-cell img, .photo-item img").forEach(function (img) {
+      img.addEventListener("error", function () {
+        var photoItem = img.closest(".heart-cell, .photo-item, div");
+        if (photoItem && photoItem.parentElement) {
+          photoItem.parentElement.style.display = "none";
+        } else if (photoItem) {
+          photoItem.style.display = "none";
+        }
+      });
+    });
+
     document.querySelectorAll("[data-lightbox]").forEach(function (item) {
       item.addEventListener("click", function () {
         var src = item.getAttribute("data-src") || item.querySelector("img")?.src;
@@ -165,7 +177,25 @@
 
     document.querySelectorAll("[data-open-modal]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        openModal(btn.getAttribute("data-open-modal"));
+        var modalId = btn.getAttribute("data-open-modal");
+
+        if (modalId === "timeline-edit-modal") {
+          var eventId = btn.getAttribute("data-event-id");
+          var eventDate = btn.getAttribute("data-event-date");
+          var eventTitle = btn.getAttribute("data-event-title");
+          var eventContent = btn.getAttribute("data-event-content");
+          var form = document.getElementById("timeline-edit-form");
+          var dateInput = document.getElementById("edit-event-date");
+          var titleInput = document.getElementById("edit-event-title");
+          var contentInput = document.getElementById("edit-event-content");
+
+          if (form && eventId) form.action = "/timeline/edit/" + eventId;
+          if (dateInput) dateInput.value = eventDate || "";
+          if (titleInput) titleInput.value = eventTitle || "";
+          if (contentInput) contentInput.value = eventContent || "";
+        }
+
+        openModal(modalId);
       });
     });
 
