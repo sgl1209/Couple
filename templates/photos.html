@@ -10,7 +10,12 @@
         <p class="page-sub page-sub-left">记录我们一起的每一个画面</p>
       </div>
       {% if user %}
-      <button type="button" class="btn btn-primary" data-open-modal="modal-upload-photo">+ 上传照片</button>
+      <div class="photo-header-actions">
+        <button type="button" class="btn btn-primary" data-open-modal="modal-upload-photo">+ 上传照片</button>
+        {% if photos %}
+        <button type="button" class="btn btn-outline" id="photo-manage-toggle">管理照片</button>
+        {% endif %}
+      </div>
       {% endif %}
     </div>
 
@@ -20,7 +25,8 @@
       <div class="heart-wall" id="heart-wall">
         {% for photo in photos[:24] %}
         <div
-          class="heart-cell heart-cell-{{ loop.index }}"
+          class="heart-cell heart-cell-{{ loop.index }} photo-selectable"
+          data-photo-id="{{ photo.id }}"
           data-lightbox
           data-src="{{ url_for('uploaded_file', filename=photo.filename) }}"
           title="{{ photo.uploader }} · {{ photo.created_at }}"
@@ -39,7 +45,8 @@
         {% for photo in photos[24:] %}
         <div>
           <div
-            class="photo-item"
+            class="photo-item photo-selectable"
+            data-photo-id="{{ photo.id }}"
             data-lightbox
             data-src="{{ url_for('uploaded_file', filename=photo.filename) }}"
           >
@@ -61,6 +68,23 @@
       </div>
       {% endif %}
     </section>
+    {% if user and photos %}
+    <div class="photo-manage-bar hidden" id="photo-manage-bar">
+      <p class="photo-manage-text">已选择 <strong id="photo-selected-count">0</strong> 张照片</p>
+      <form
+        method="post"
+        action="{{ url_for('delete_photos_batch') }}"
+        id="photo-batch-delete-form"
+        onsubmit="return confirm('确定删除选中的照片吗？');"
+      >
+        <input type="hidden" name="photo_ids" id="selected-photo-ids">
+        <div class="photo-manage-actions">
+          <button type="button" class="btn btn-outline" id="photo-manage-cancel">取消</button>
+          <button type="submit" class="btn btn-primary" id="photo-delete-selected" disabled>删除选中</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
   </div>
 </main>
 

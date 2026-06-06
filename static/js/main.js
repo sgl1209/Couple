@@ -137,6 +137,7 @@
 
     document.querySelectorAll("[data-lightbox]").forEach(function (item) {
       item.addEventListener("click", function () {
+        if (document.body.classList.contains("photo-managing")) return;
         var src = item.getAttribute("data-src") || item.querySelector("img")?.src;
         if (src) {
           lightboxImg.src = src;
@@ -153,6 +154,134 @@
     if (closeBtn) closeBtn.addEventListener("click", close);
     lightbox.addEventListener("click", function (e) {
       if (e.target === lightbox) close();
+    });
+  }
+
+  // ---------- 照片管理模式（多选删除） ----------
+  function initPhotoManageMode() {
+    var toggleBtn = document.getElementById("photo-manage-toggle");
+    var manageBar = document.getElementById("photo-manage-bar");
+    var cancelBtn = document.getElementById("photo-manage-cancel");
+    var deleteBtn = document.getElementById("photo-delete-selected");
+    var selectedInput = document.getElementById("selected-photo-ids");
+    var selectedCount = document.getElementById("photo-selected-count");
+    var deleteForm = document.getElementById("photo-batch-delete-form");
+    var items = Array.prototype.slice.call(document.querySelectorAll("[data-photo-id]"));
+    if (!toggleBtn || !manageBar || !selectedInput || !selectedCount || !items.length) return;
+
+    var selected = new Set();
+    var managing = false;
+
+    function renderSelection() {
+      items.forEach(function (item) {
+        var photoId = item.getAttribute("data-photo-id");
+        item.classList.toggle("photo-selected", selected.has(photoId));
+      });
+      selectedCount.textContent = selected.size;
+      selectedInput.value = Array.from(selected).join(",");
+      if (deleteBtn) deleteBtn.disabled = selected.size === 0;
+    }
+
+    function enterManageMode() {
+      managing = true;
+      document.body.classList.add("photo-managing");
+      manageBar.classList.remove("hidden");
+      toggleBtn.textContent = "退出管理";
+      items.forEach(function (item) {
+        item.classList.add("photo-manage-mode");
+      });
+      renderSelection();
+    }
+
+    function exitManageMode() {
+      managing = false;
+      selected.clear();
+      document.body.classList.remove("photo-managing");
+      manageBar.classList.add("hidden");
+      toggleBtn.textContent = "管理照片";
+      items.forEach(function (item) {
+        item.classList.remove("photo-manage-mode");
+        item.classList.remove("photo-selected");
+      });
+      renderSelection();
+    }
+
+    toggleBtn.addEventListener("click", function () {
+      if (managing) {
+        exitManageMode();
+      } else {
+        enterManageMode();
+      }
+    });
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", function () {
+        exitManageMode();
+      });
+    }
+
+    items.forEach(function (item) {
+      item.addEventListener("click", function (e) {
+        if (!managing) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var photoId = item.getAttribute("data-photo-id");
+        if (!photoId) return;
+        if (selected.has(photoId)) {
+          selected.delete(photoId);
+        } else {
+          selected.add(photoId);
+        }
+        renderSelection();
+      });
+    });
+
+    if (deleteForm) {
+      deleteForm.addEventListener("submit", function (e) {
+        if (!selectedInput.value) {
+          e.preventDefault();
+          alert("请先选择要删除的照片");
+        }
+      });
+    }
+  }
+
+  // ---------- 长文本折叠 ----------
+  function initCollapsibleTextWithin(root) {
+    var scope = root || document;
+    var blocks = Array.prototype.slice.call(
+      scope.querySelectorAll(".js-collapsible-text")
+    );
+    if (!blocks.length) return;
+
+    blocks.forEach(function (block) {
+      if (block.dataset.collapseReady === "1") return;
+
+      var lines = parseInt(block.getAttribute("data-collapse-lines") || "6", 10);
+      if (!lines || lines < 2) lines = 6;
+      block.style.setProperty("--collapse-lines", String(lines));
+      block.classList.add("collapsible-text");
+      block.classList.add("is-collapsed");
+
+      var needsToggle = block.scrollHeight - block.clientHeight > 6;
+      if (!needsToggle) {
+        block.classList.remove("is-collapsed");
+        block.dataset.collapseReady = "1";
+        return;
+      }
+
+      var toggleBtn = document.createElement("button");
+      toggleBtn.type = "button";
+      toggleBtn.className = "text-toggle-btn";
+      toggleBtn.textContent = "展开";
+      toggleBtn.addEventListener("click", function () {
+        var expanded = block.classList.toggle("is-expanded");
+        block.classList.toggle("is-collapsed", !expanded);
+        toggleBtn.textContent = expanded ? "收起" : "展开";
+      });
+
+      block.insertAdjacentElement("afterend", toggleBtn);
+      block.dataset.collapseReady = "1";
     });
   }
 
@@ -229,11 +358,15 @@
     });
   }
 
+  window.initCollapsibleTextWithin = initCollapsibleTextWithin;
+
   document.addEventListener("DOMContentLoaded", function () {
     initTimers();
     initModals();
     initPhotoPreview();
     initLightbox();
+    initPhotoManageMode();
+    initCollapsibleTextWithin(document);
     initNavActive();
   });
 })();

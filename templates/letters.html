@@ -20,7 +20,7 @@
       {% for letter in letters %}
       <article class="card letter-card">
         <h2 class="letter-title">{{ letter.title }}</h2>
-        <div class="letter-content">{{ letter.content }}</div>
+        <div class="letter-content js-collapsible-text" data-collapse-lines="6">{{ letter.content }}</div>
         <footer class="letter-meta">
           {{ letter.author }} · {{ letter.created_at }}
         </footer>

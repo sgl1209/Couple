@@ -313,6 +313,71 @@ def upload_photo():
     flash("照片上传成功～", "success")
     return redirect(url_for("photos"))
 
+@app.route("/photos/delete/<int:photo_id>", methods=["POST"])
+@login_required
+def delete_photo(photo_id):
+    """删除照片（删除记录并尝试删除文件）"""
+    db = get_db()
+    photo = db.execute("SELECT id, filename FROM photos WHERE id = ?", (photo_id,)).fetchone()
+    if photo is None:
+        flash("照片不存在或已删除", "warning")
+        return redirect(url_for("photos"))
+
+    upload_root = os.path.abspath(app.config["UPLOAD_FOLDER"])
+    file_path = os.path.abspath(os.path.join(upload_root, photo["filename"]))
+    if os.path.commonpath([upload_root, file_path]) == upload_root and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            flash("照片记录已删除，文件清理失败", "warning")
+
+    db.execute("DELETE FROM photos WHERE id = ?", (photo_id,))
+    db.commit()
+    flash("照片已删除", "success")
+    return redirect(url_for("photos"))
+
+@app.route("/photos/delete-batch", methods=["POST"])
+@login_required
+def delete_photos_batch():
+    """批量删除照片（删除记录并尝试删除文件）"""
+    raw_ids = request.form.get("photo_ids", "")
+    photo_ids = []
+    for item in raw_ids.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if item.isdigit():
+            photo_ids.append(int(item))
+    photo_ids = list(dict.fromkeys(photo_ids))
+    if not photo_ids:
+        flash("请先选择要删除的照片", "warning")
+        return redirect(url_for("photos"))
+
+    db = get_db()
+    placeholders = ",".join("?" * len(photo_ids))
+    photos = db.execute(
+        f"SELECT id, filename FROM photos WHERE id IN ({placeholders})", photo_ids
+    ).fetchall()
+    if not photos:
+        flash("未找到可删除的照片", "warning")
+        return redirect(url_for("photos"))
+
+    upload_root = os.path.abspath(app.config["UPLOAD_FOLDER"])
+    for photo in photos:
+        file_path = os.path.abspath(os.path.join(upload_root, photo["filename"]))
+        if os.path.commonpath([upload_root, file_path]) == upload_root and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+    existing_ids = [photo["id"] for photo in photos]
+    delete_placeholders = ",".join("?" * len(existing_ids))
+    db.execute(f"DELETE FROM photos WHERE id IN ({delete_placeholders})", existing_ids)
+    db.commit()
+    flash(f"已删除 {len(existing_ids)} 张照片", "success")
+    return redirect(url_for("photos"))
+
 
 @app.route("/uploads/<path:filename>")
 @login_required
