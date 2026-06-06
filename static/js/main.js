@@ -116,6 +116,38 @@
     });
   }
 
+  // ---------- 心形空白格上传 ----------  
+  function initHeartUploadSlots() {
+    var slots = Array.prototype.slice.call(
+      document.querySelectorAll(".js-heart-upload-slot")
+    );
+    if (!slots.length) return;
+
+    var uploadTrigger = document.querySelector(
+      '[data-open-modal="modal-upload-photo"]'
+    );
+    var pageInput = document.getElementById("photo-page-input");
+    var fileInput = document.getElementById("photo-input");
+    var heartWall = document.getElementById("heart-wall");
+    if (!uploadTrigger || !pageInput || !heartWall) return;
+
+    var currentPage = heartWall.getAttribute("data-page");
+    if (currentPage) {
+      pageInput.value = currentPage;
+    }
+
+    slots.forEach(function (slot) {
+      slot.addEventListener("click", function () {
+        if (document.body.classList.contains("photo-managing")) return;
+        uploadTrigger.click();
+        if (fileInput) {
+          setTimeout(function () {
+            fileInput.focus();
+          }, 0);
+        }
+      });
+    });
+  }
   // ---------- 照片灯箱 ----------
   function initLightbox() {
     var lightbox = document.getElementById("lightbox");
@@ -364,6 +396,7 @@
     initTimers();
     initModals();
     initPhotoPreview();
+    initHeartUploadSlots();
     initLightbox();
     initPhotoManageMode();
     initCollapsibleTextWithin(document);

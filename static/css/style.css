@@ -362,6 +362,39 @@ a {
   height: 100%;
   object-fit: cover;
 }
+.heart-cell-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-linear-gradient(
+    135deg,
+    #fff 0,
+    #fff 10px,
+    var(--pink-50) 10px,
+    var(--pink-50) 20px
+  );
+  border-style: dashed;
+  color: var(--pink-400);
+}
+.heart-cell-empty span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid var(--pink-300);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.heart-cell-empty:hover {
+  background: var(--pink-100);
+}
+.heart-cell-empty:focus-visible {
+  outline: 3px solid rgba(244, 63, 94, 0.35);
+  outline-offset: 1px;
+}
 /* 心形格子坐标（7 列 × 6 行，最多 24 张） */
 .heart-cell-1  { grid-column: 2; grid-row: 1; }
 .heart-cell-2  { grid-column: 3; grid-row: 1; }
@@ -396,7 +429,23 @@ a {
   text-align: center;
   color: var(--pink-400);
   font-size: 0.9rem;
-  margin: 2rem 0 1rem;
+  margin: 1.1rem 0 0.8rem;
+}
+.heart-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 0 0 1.2rem;
+}
+.heart-page-info {
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+.btn.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 .photo-grid {
   display: grid;
@@ -450,6 +499,10 @@ a {
 }
 .photo-managing .photo-manage-mode:hover {
   transform: none;
+}
+.photo-managing .heart-cell-empty {
+  pointer-events: none;
+  opacity: 0.55;
 }
 .photo-managing .photo-manage-mode::before {
   content: "";

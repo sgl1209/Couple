@@ -18,53 +18,56 @@
       </div>
       {% endif %}
     </div>
-
+    <!-- 心形照片墙（固定空格，点击空格可上传） -->
     <!-- 心形照片墙（进入页面直接看到内容） -->
     <section class="heart-section">
-      {% if photos %}
-      <div class="heart-wall" id="heart-wall">
-        {% for photo in photos[:24] %}
-        <div
-          class="heart-cell heart-cell-{{ loop.index }} photo-selectable"
-          data-photo-id="{{ photo.id }}"
-          data-lightbox
-          data-src="{{ url_for('uploaded_file', filename=photo.filename) }}"
-          title="{{ photo.uploader }} · {{ photo.created_at }}"
-        >
-          <img
-            src="{{ url_for('uploaded_file', filename=photo.filename) }}"
-            alt="我们的照片"
-            loading="lazy"
-          >
-        </div>
-        {% endfor %}
-      </div>
-      {% if photos|length > 24 %}
-      <p class="heart-more-label">更多回忆</p>
-      <div class="photo-grid photo-grid-extra">
-        {% for photo in photos[24:] %}
-        <div>
-          <div
-            class="photo-item photo-selectable"
-            data-photo-id="{{ photo.id }}"
-            data-lightbox
-            data-src="{{ url_for('uploaded_file', filename=photo.filename) }}"
-          >
-            <img
-              src="{{ url_for('uploaded_file', filename=photo.filename) }}"
-              alt="我们的照片"
-              loading="lazy"
+      <div class="heart-wall" id="heart-wall" data-page="{{ page }}">
+        {% for slot_index in range(heart_page_size) %}
+          {% if slot_index < photos|length %}
+            {% set photo = photos[slot_index] %}
+            <div
+              class="heart-cell heart-cell-{{ slot_index + 1 }} photo-selectable"
+              data-photo-id="{{ photo.id }}"
+              data-lightbox
+              data-src="{{ url_for('uploaded_file', filename=photo.filename) }}"
+              title="{{ photo.uploader }} · {{ photo.created_at }}"
             >
-          </div>
-          <p class="photo-meta">{{ photo.uploader }} · {{ photo.created_at }}</p>
-        </div>
+              <img
+                src="{{ url_for('uploaded_file', filename=photo.filename) }}"
+                alt="我们的照片"
+                loading="lazy"
+              >
+            </div>
+          {% else %}
+            <button
+              type="button"
+              class="heart-cell heart-cell-{{ slot_index + 1 }} heart-cell-empty js-heart-upload-slot"
+              data-slot-index="{{ slot_index + 1 }}"
+              title="点击上传照片到这一格"
+            >
+              <span>+</span>
+            </button>
+          {% endif %}
         {% endfor %}
       </div>
-      {% endif %}
-      {% else %}
+      <p class="heart-more-label">点击空白格子上传照片，填满后翻页继续记录回忆</p>
+      <div class="heart-pagination">
+        {% if page > 1 %}
+          <a class="btn btn-outline" href="{{ url_for('photos', page=page - 1) }}">上一页</a>
+        {% else %}
+          <span class="btn btn-outline is-disabled">上一页</span>
+        {% endif %}
+        <p class="heart-page-info">第 {{ page }} 页 / 共 {{ max_page }} 页</p>
+        {% if page < max_page %}
+          <a class="btn btn-outline" href="{{ url_for('photos', page=page + 1) }}">下一页</a>
+        {% else %}
+          <span class="btn btn-outline is-disabled">下一页</span>
+        {% endif %}
+      </div>
+      {% if not total_photos %}
       <div class="card text-center heart-empty">
         <p style="font-size:2rem;margin-bottom:0.5rem;">♥</p>
-        <p style="color:var(--text-light);">还没有照片，点击右上角上传第一张吧～</p>
+        <p style="color:var(--text-light);">还没有照片，点击空白格子上传第一张吧～</p>
       </div>
       {% endif %}
     </section>
@@ -102,6 +105,7 @@
       enctype="multipart/form-data"
       id="upload-form"
     >
+      <input type="hidden" name="page" id="photo-page-input" value="{{ page }}">
       <div class="modal-body">
         <label class="label" for="photo-input">选择本地图片（单张，最大 8MB）</label>
         <input

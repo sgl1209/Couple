@@ -22,7 +22,6 @@ from flask import (
     session,
     url_for,
 )
-from flask_socketio import SocketIO, emit, disconnect, join_room, leave_room
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -55,9 +54,6 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "couple-secret-key-change-me-in-production"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 单张最大 8MB
-
-# 初始化 SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 # ========== 数据库 ==========
@@ -260,9 +256,10 @@ def index():
 @login_required
 def photos():
     """照片墙（需登录查看与上传）"""
+    heart_page_size = 24
     db = get_db()
     photo_list = db.execute(
-        "SELECT * FROM photos ORDER BY created_at DESC"
+        "SELECT * FROM photos ORDER BY created_at ASC, id ASC"
     ).fetchall()
     # 过滤出真实存在的照片，删除找不到的记录
     valid_photos = []
@@ -278,25 +275,44 @@ def photos():
         placeholders = ",".join("?" * len(invalid_photo_ids))
         db.execute(f"DELETE FROM photos WHERE id IN ({placeholders})", invalid_photo_ids)
         db.commit()
-    return render_template("photos.html", user=current_user(), photos=valid_photos)
+    total_photos = len(valid_photos)
+    max_page = max(1, (total_photos // heart_page_size) + 1)
+    page_str = request.args.get("page", "1").strip()
+    page = int(page_str) if page_str.isdigit() else 1
+    page = max(1, min(page, max_page))
+    start = (page - 1) * heart_page_size
+    end = start + heart_page_size
+    page_photos = valid_photos[start:end]
+    return render_template(
+        "photos.html",
+        user=current_user(),
+        photos=page_photos,
+        page=page,
+        max_page=max_page,
+        heart_page_size=heart_page_size,
+        total_photos=total_photos,
+    )
 
 
 @app.route("/photos/upload", methods=["POST"])
 @login_required
 def upload_photo():
     """上传照片"""
+    page_str = request.form.get("page", "1").strip()
+    page = int(page_str) if page_str.isdigit() else 1
+    page = max(1, page)
     if "photo" not in request.files:
         flash("请选择一张图片", "warning")
-        return redirect(url_for("photos"))
+        return redirect(url_for("photos", page=page))
 
     file = request.files["photo"]
     if file.filename == "":
         flash("未选择文件", "warning")
-        return redirect(url_for("photos"))
+        return redirect(url_for("photos", page=page))
 
     if not allowed_file(file.filename):
         flash("仅支持 png、jpg、jpeg、gif、webp", "error")
-        return redirect(url_for("photos"))
+        return redirect(url_for("photos", page=page))
 
     original = secure_filename(file.filename)
     ext = original.rsplit(".", 1)[1].lower()
@@ -311,7 +327,7 @@ def upload_photo():
     )
     db.commit()
     flash("照片上传成功～", "success")
-    return redirect(url_for("photos"))
+    return redirect(url_for("photos", page=page))
 
 @app.route("/photos/delete/<int:photo_id>", methods=["POST"])
 @login_required
@@ -451,35 +467,8 @@ def post_secretdiary():
         (content, user["display_name"], now),
     )
     db.commit()
-    
-    # 通过 SocketIO 实时通知
-    diary_entry = {
-        "id": db.execute("SELECT last_insert_rowid()").fetchone()[0],
-        "content": content,
-        "author": user["display_name"],
-        "created_at": now,
-    }
-    socketio.emit(
-        "new_diary",
-        diary_entry,
-        broadcast=True,
-    )
-    
     flash("心事发布成功～", "success")
     return redirect(url_for("secretdiary"))
-
-
-@socketio.on("connect")
-def handle_connect():
-    """WebSocket 连接"""
-    if session.get("user_id"):
-        emit("response", {"data": "已连接"})
-
-
-@socketio.on("disconnect")
-def handle_disconnect():
-    """WebSocket 断开连接"""
-    pass
 
 
 @app.route("/timeline/add", methods=["POST"])
@@ -557,4 +546,4 @@ def delete_timeline(event_id):
 if __name__ == "__main__":
     init_db()
     # host=0.0.0.0 便于轻量服务器外网访问；仅本机可改为 127.0.0.1
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
