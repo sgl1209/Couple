@@ -8,9 +8,9 @@
       <div>
         <h1 class="page-title page-title-left">每日签到转盘</h1>
         {% if is_checkin_player_user %}
-        <p class="page-sub page-sub-left">单人模式：仅 {{ checkin_player_name }} 可签到抽奖，积分攒满后填写心愿纸条送给 {{ wish_receiver_name }}</p>
+        <p class="page-sub page-sub-left">{{ checkin_player_name }} 可签到抽奖，积分攒满后填写心愿纸条交给 {{ wish_receiver_name }}让他帮你实现吧。</p>
         {% else %}
-        <p class="page-sub page-sub-left">只读模式：可查看 {{ checkin_player_name }} 的签到结果与心愿纸条</p>
+        <p class="page-sub page-sub-left">查看 {{ checkin_player_name }} 的签到结果与心愿纸条</p>
         {% endif %}
       </div>
     </div>
@@ -23,11 +23,11 @@
         data-is-player="{{ 1 if is_checkin_player_user else 0 }}"
       >
         <div class="checkin-mode-tip is-player">
-          你是今日签到账号，可以进行转盘抽奖
+          小六早安午安晚安，快来获取今日大奖！
         </div>
 
         <div class="checkin-jar">
-          <p class="checkin-jar-title">积分罐进度</p>
+          <p class="checkin-jar-title">心愿罐进度</p>
           <p class="checkin-jar-value">
             <strong id="checkin-points">{{ points_jar.points }}</strong>
             <span>/</span>
@@ -38,7 +38,7 @@
           </div>
           <p class="checkin-progress-text">
             当前完成 <strong id="checkin-progress-text">{{ points_jar.progress }}</strong>%。
-            {% if points_jar.can_redeem %}已满足领奖条件{% else %}继续签到就能解锁大奖{% endif %}
+            {% if points_jar.can_redeem %}已满足领奖条件{% else %}继续签到就能实现心愿啦！{% endif %}
           </p>
         </div>
 
