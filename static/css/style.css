@@ -962,7 +962,19 @@ a {
   border: 10px solid #fff;
   box-shadow: 0 12px 30px rgba(244, 63, 94, 0.14);
   background: radial-gradient(circle at center, #fff 0%, #fff7fb 60%, #ffe7f0 100%);
-  transition: transform 4.1s cubic-bezier(0.17, 0.85, 0.22, 1);
+  transition: transform 4.1s cubic-bezier(0.17, 0.85, 0.22, 1), box-shadow 0.3s ease, filter 0.3s ease;
+}
+.checkin-wheel::before {
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: rgba(244, 63, 94, 0.45);
+  border-right-color: rgba(244, 63, 94, 0.24);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
 }
 .checkin-wheel::after {
   content: "";
@@ -970,15 +982,33 @@ a {
   inset: 12%;
   border: 2px dashed var(--pink-200);
   border-radius: 50%;
+  z-index: 1;
+}
+.checkin-wheel.is-spinning {
+  filter: saturate(1.04);
+  box-shadow: 0 14px 36px rgba(244, 63, 94, 0.22);
+}
+.checkin-wheel.is-spinning::before {
+  opacity: 1;
+  animation: checkin-wheel-orbit 0.9s linear infinite;
+}
+.checkin-wheel-wrap.is-result .checkin-wheel {
+  animation: checkin-wheel-result 0.68s ease-out;
 }
 .checkin-wheel-pointer {
   position: absolute;
   top: -0.35rem;
   left: 50%;
   transform: translateX(-50%);
+  transform-origin: 50% 0%;
   color: var(--pink-500);
   font-size: 1.25rem;
   z-index: 3;
+  transition: color 0.2s ease;
+}
+.checkin-wheel-pointer.is-spinning {
+  animation: checkin-pointer-bounce 0.16s ease-in-out infinite;
+  color: #ef476f;
 }
 .checkin-wheel-item {
   position: absolute;
@@ -1164,6 +1194,36 @@ a {
 .checkin-empty-tip {
   color: var(--text-light);
   font-size: 0.9rem;
+}
+@keyframes checkin-wheel-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes checkin-pointer-bounce {
+  0%, 100% {
+    transform: translateX(-50%) rotate(0deg);
+  }
+  50% {
+    transform: translateX(-50%) rotate(-16deg);
+  }
+}
+@keyframes checkin-wheel-result {
+  0% {
+    filter: brightness(1.02);
+    box-shadow: 0 14px 36px rgba(244, 63, 94, 0.2);
+  }
+  55% {
+    filter: brightness(1.1);
+    box-shadow: 0 0 0 10px rgba(244, 63, 94, 0.14), 0 18px 44px rgba(244, 63, 94, 0.26);
+  }
+  100% {
+    filter: brightness(1);
+    box-shadow: 0 12px 30px rgba(244, 63, 94, 0.14);
+  }
 }
 @media (max-width: 520px) {
   .checkin-history-filters {

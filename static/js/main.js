@@ -394,6 +394,10 @@
   function initCheckinSpin() {
     var panel = document.getElementById("checkin-panel");
     var wheel = document.getElementById("checkin-wheel");
+    var wheelWrap = wheel ? wheel.closest(".checkin-wheel-wrap") : null;
+    var wheelPointer = wheelWrap
+      ? wheelWrap.querySelector(".checkin-wheel-pointer")
+      : null;
     var spinBtn = document.getElementById("checkin-spin-btn");
     var spinStatus = document.getElementById("checkin-spin-status");
     var rewardsDataEl = document.getElementById("checkin-rewards-data");
@@ -434,6 +438,7 @@
     var segmentAngle = 360 / rewards.length;
     var spinning = false;
     var wheelRotation = 0;
+    var spinDurationMs = 4200;
     var redeemConfirmDefaultText = redeemConfirmBtn
       ? redeemConfirmBtn.textContent
       : "提交心愿纸条";
@@ -458,6 +463,19 @@
       if (!el) return;
       el.textContent = text || "";
       el.classList.toggle("is-error", !!isError);
+    }
+    function setSpinAnimationState(isActive) {
+      if (wheel) wheel.classList.toggle("is-spinning", !!isActive);
+      if (wheelPointer) wheelPointer.classList.toggle("is-spinning", !!isActive);
+    }
+    function playSpinResultAnimation() {
+      if (!wheelWrap) return;
+      wheelWrap.classList.remove("is-result");
+      void wheelWrap.offsetWidth;
+      wheelWrap.classList.add("is-result");
+      window.setTimeout(function () {
+        wheelWrap.classList.remove("is-result");
+      }, 720);
     }
 
     function applyJarState(jarState) {
@@ -613,6 +631,7 @@
       spinBtn.disabled = true;
       spinBtn.textContent = "转盘中...";
       setInlineStatus(spinStatus, "正在抽取今天的奖励...");
+      setSpinAnimationState(true);
 
       fetch("/checkin/spin", { method: "POST" })
         .then(function (res) {
@@ -637,6 +656,8 @@
           wheel.style.transform = "rotate(" + wheelRotation + "deg)";
 
           window.setTimeout(function () {
+            setSpinAnimationState(false);
+            playSpinResultAnimation();
             highlightReward(rewardIndex);
             applyJarState(result.data.points_jar);
             spinBtn.textContent = "今日已签到";
@@ -652,9 +673,10 @@
             );
             loadHistory(currentHistoryPeriod);
             spinning = false;
-          }, 4200);
+          }, spinDurationMs);
         })
         .catch(function (err) {
+          setSpinAnimationState(false);
           spinning = false;
           spinBtn.disabled = false;
           spinBtn.textContent = "开始转盘";
