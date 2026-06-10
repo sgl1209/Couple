@@ -390,6 +390,355 @@
     });
   }
 
+  // ---------- 签到转盘 ----------
+  function initCheckinSpin() {
+    var panel = document.getElementById("checkin-panel");
+    var wheel = document.getElementById("checkin-wheel");
+    var spinBtn = document.getElementById("checkin-spin-btn");
+    var spinStatus = document.getElementById("checkin-spin-status");
+    var rewardsDataEl = document.getElementById("checkin-rewards-data");
+    var pointsEl = document.getElementById("checkin-points");
+    var targetEl = document.getElementById("checkin-target");
+    var progressFillEl = document.getElementById("checkin-progress-fill");
+    var progressTextEl = document.getElementById("checkin-progress-text");
+    var redeemBtn = document.getElementById("checkin-redeem-btn");
+    var redeemConfirmBtn = document.getElementById("checkin-redeem-confirm-btn");
+    var redeemModal = document.getElementById("checkin-redeem-modal");
+    var redeemStatus = document.getElementById("checkin-redeem-status");
+    var wishNoteInput = document.getElementById("checkin-wish-note-input");
+    var wishNoteCountEl = document.getElementById("checkin-wish-note-count");
+    var historyListEl = document.getElementById("checkin-history-list");
+    var historyEmptyEl = document.getElementById("checkin-history-empty");
+    var historyPeriodLabelEl = document.getElementById("checkin-history-period-label");
+    var historyFilterBtns = Array.prototype.slice.call(
+      document.querySelectorAll("[data-checkin-history-period]")
+    );
+    if (!panel || !wheel || !spinBtn || !spinStatus || !rewardsDataEl) return;
+
+    var isPlayer = panel.getAttribute("data-is-player") === "1";
+    var currentHistoryPeriod = "month";
+    if (historyListEl) {
+      var defaultPeriod = historyListEl.getAttribute("data-history-default-period");
+      if (defaultPeriod === "week" || defaultPeriod === "month") {
+        currentHistoryPeriod = defaultPeriod;
+      }
+    }
+    var rewards = [];
+    try {
+      rewards = JSON.parse(rewardsDataEl.textContent || "[]");
+    } catch (_err) {
+      rewards = [];
+    }
+    if (!Array.isArray(rewards) || !rewards.length) return;
+
+    var segmentAngle = 360 / rewards.length;
+    var spinning = false;
+    var wheelRotation = 0;
+    var redeemConfirmDefaultText = redeemConfirmBtn
+      ? redeemConfirmBtn.textContent
+      : "提交心愿纸条";
+    function getWishNoteValue() {
+      if (!wishNoteInput) return "";
+      return (wishNoteInput.value || "").trim();
+    }
+    function syncWishNoteCount() {
+      if (!wishNoteInput || !wishNoteCountEl) return;
+      wishNoteCountEl.textContent = String((wishNoteInput.value || "").length);
+    }
+    function closeModalOverlay(overlay) {
+      if (!overlay) return;
+      overlay.classList.remove("show");
+      overlay.setAttribute("aria-hidden", "true");
+      if (!document.querySelector(".modal-overlay.show")) {
+        document.body.style.overflow = "";
+      }
+    }
+
+    function setInlineStatus(el, text, isError) {
+      if (!el) return;
+      el.textContent = text || "";
+      el.classList.toggle("is-error", !!isError);
+    }
+
+    function applyJarState(jarState) {
+      if (!jarState) return;
+      if (pointsEl) pointsEl.textContent = jarState.points;
+      if (targetEl) targetEl.textContent = jarState.target_points;
+      if (progressFillEl) {
+        progressFillEl.style.width = String(jarState.progress || 0) + "%";
+      }
+      if (progressTextEl) progressTextEl.textContent = jarState.progress;
+      if (redeemBtn) {
+        redeemBtn.disabled = !(isPlayer && jarState.can_redeem);
+      }
+    }
+
+    function highlightReward(index) {
+      document.querySelectorAll("[data-reward-row]").forEach(function (item) {
+        item.classList.toggle(
+          "is-active",
+          item.getAttribute("data-reward-row") === String(index)
+        );
+      });
+      document.querySelectorAll(".checkin-wheel-item").forEach(function (item) {
+        item.classList.toggle(
+          "is-active",
+          item.getAttribute("data-reward-index") === String(index)
+        );
+      });
+    }
+    function setHistoryPeriodLabel(periodText, periodValue) {
+      if (!historyPeriodLabelEl) return;
+      if (periodText) {
+        historyPeriodLabelEl.textContent = periodText;
+        return;
+      }
+      historyPeriodLabelEl.textContent = periodValue === "week" ? "本周" : "本月";
+    }
+
+    function setHistoryFilterActive(period) {
+      historyFilterBtns.forEach(function (btn) {
+        btn.classList.toggle(
+          "is-active",
+          btn.getAttribute("data-checkin-history-period") === period
+        );
+      });
+    }
+
+    function setHistoryFilterLoading(isLoading) {
+      historyFilterBtns.forEach(function (btn) {
+        btn.disabled = !!isLoading;
+      });
+    }
+
+    function renderHistory(logs) {
+      if (!historyListEl) return;
+      historyListEl.innerHTML = "";
+
+      var list = Array.isArray(logs) ? logs : [];
+      list.forEach(function (log) {
+        var itemEl = document.createElement("div");
+        itemEl.className =
+          "checkin-history-item" + (log && log.is_jackpot ? " is-jackpot" : "");
+
+        var timeEl = document.createElement("p");
+        timeEl.className = "checkin-history-time";
+        timeEl.textContent = (log && log.created_at) || "--";
+        itemEl.appendChild(timeEl);
+
+        var rewardEl = document.createElement("p");
+        rewardEl.className = "checkin-history-reward";
+        var pointsValue = parseInt((log && log.points) || 0, 10);
+        if (isNaN(pointsValue)) pointsValue = 0;
+        rewardEl.appendChild(
+          document.createTextNode(
+            ((log && log.reward_icon) || "🎁") +
+              " " +
+              ((log && log.reward_name) || "奖励") +
+              " "
+          )
+        );
+        var strongEl = document.createElement("strong");
+        strongEl.textContent = "+" + pointsValue;
+        rewardEl.appendChild(strongEl);
+        itemEl.appendChild(rewardEl);
+
+        historyListEl.appendChild(itemEl);
+      });
+
+      var hasLogs = list.length > 0;
+      historyListEl.classList.toggle("hidden", !hasLogs);
+      if (historyEmptyEl) {
+        historyEmptyEl.classList.toggle("hidden", hasLogs);
+      }
+    }
+
+    function loadHistory(period) {
+      var targetPeriod = period === "week" ? "week" : "month";
+      setHistoryFilterActive(targetPeriod);
+      setHistoryFilterLoading(true);
+
+      return fetch("/checkin/history?period=" + encodeURIComponent(targetPeriod), {
+        method: "GET",
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok || !result.data || !result.data.ok) {
+            var errMsg =
+              (result.data && result.data.message) || "历史记录加载失败，请稍后重试";
+            throw new Error(errMsg);
+          }
+          currentHistoryPeriod =
+            result.data.period === "week" ? "week" : "month";
+          renderHistory(result.data.logs || []);
+          setHistoryPeriodLabel(result.data.period_text, currentHistoryPeriod);
+          setHistoryFilterActive(currentHistoryPeriod);
+        })
+        .catch(function (err) {
+          setInlineStatus(
+            spinStatus,
+            err.message || "历史记录加载失败，请稍后重试",
+            true
+          );
+        })
+        .then(function () {
+          setHistoryFilterLoading(false);
+        });
+    }
+
+    if (historyListEl && !historyListEl.children.length) {
+      historyListEl.classList.add("hidden");
+    }
+    setHistoryFilterActive(currentHistoryPeriod);
+    setHistoryPeriodLabel("", currentHistoryPeriod);
+    historyFilterBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.disabled) return;
+        var period = btn.getAttribute("data-checkin-history-period");
+        loadHistory(period);
+      });
+    });
+    if (wishNoteInput) {
+      syncWishNoteCount();
+      wishNoteInput.addEventListener("input", syncWishNoteCount);
+    }
+
+    spinBtn.addEventListener("click", function () {
+      if (spinning || spinBtn.disabled) return;
+      spinning = true;
+      spinBtn.disabled = true;
+      spinBtn.textContent = "转盘中...";
+      setInlineStatus(spinStatus, "正在抽取今天的奖励...");
+
+      fetch("/checkin/spin", { method: "POST" })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          if (!result.ok || !result.data || !result.data.ok) {
+            var errMsg =
+              (result.data && result.data.message) || "签到失败，请稍后重试";
+            throw new Error(errMsg);
+          }
+
+          var reward = result.data.reward || {};
+          var rewardIndex =
+            typeof reward.index === "number" && reward.index >= 0
+              ? reward.index
+              : 0;
+          var finalOffset = (360 - rewardIndex * segmentAngle) % 360;
+          wheelRotation += 360 * 6 + finalOffset;
+          wheel.style.transform = "rotate(" + wheelRotation + "deg)";
+
+          window.setTimeout(function () {
+            highlightReward(rewardIndex);
+            applyJarState(result.data.points_jar);
+            spinBtn.textContent = "今日已签到";
+            setInlineStatus(
+              spinStatus,
+              "签到成功：" +
+                (reward.icon || "🎁") +
+                " " +
+                (reward.name || "奖励") +
+                "（+" +
+                (reward.points || 0) +
+                "）"
+            );
+            loadHistory(currentHistoryPeriod);
+            spinning = false;
+          }, 4200);
+        })
+        .catch(function (err) {
+          spinning = false;
+          spinBtn.disabled = false;
+          spinBtn.textContent = "开始转盘";
+          setInlineStatus(spinStatus, err.message || "签到失败，请稍后再试", true);
+        });
+    });
+
+    if (redeemBtn) {
+      redeemBtn.addEventListener("click", function () {
+        if (redeemBtn.disabled) return;
+        setInlineStatus(redeemStatus, "");
+        if (wishNoteInput) {
+          syncWishNoteCount();
+          window.setTimeout(function () {
+            wishNoteInput.focus();
+          }, 0);
+        }
+      });
+    }
+
+    if (redeemConfirmBtn) {
+      redeemConfirmBtn.addEventListener("click", function () {
+        if (redeemConfirmBtn.disabled) return;
+        var wishNote = getWishNoteValue();
+        if (!wishNote) {
+          setInlineStatus(redeemStatus, "请先写下心愿纸条再提交～", true);
+          if (wishNoteInput) {
+            wishNoteInput.focus();
+          }
+          return;
+        }
+
+        redeemConfirmBtn.disabled = true;
+        redeemConfirmBtn.textContent = "提交中...";
+        if (redeemBtn) redeemBtn.disabled = true;
+        setInlineStatus(redeemStatus, "正在提交心愿纸条...");
+
+        fetch("/checkin/redeem", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            wish_note: wishNote,
+          }),
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { ok: res.ok, data: data };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok || !result.data || !result.data.ok) {
+              var errMsg =
+                (result.data && result.data.message) || "提交失败，请稍后重试";
+              throw new Error(errMsg);
+            }
+            applyJarState(result.data.points_jar);
+            closeModalOverlay(redeemModal);
+            if (wishNoteInput) {
+              wishNoteInput.value = "";
+              syncWishNoteCount();
+            }
+            setInlineStatus(
+              redeemStatus,
+              result.data.message || "心愿纸条提交成功，积分罐已清零，开启下一轮积攒吧～"
+            );
+          })
+          .catch(function (err) {
+            setInlineStatus(
+              redeemStatus,
+              err.message || "提交失败，请稍后重试",
+              true
+            );
+            if (redeemBtn) redeemBtn.disabled = false;
+          })
+          .then(function () {
+            redeemConfirmBtn.disabled = false;
+            redeemConfirmBtn.textContent = redeemConfirmDefaultText;
+          });
+      });
+    }
+  }
+
   window.initCollapsibleTextWithin = initCollapsibleTextWithin;
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -401,5 +750,6 @@
     initPhotoManageMode();
     initCollapsibleTextWithin(document);
     initNavActive();
+    initCheckinSpin();
   });
 })();

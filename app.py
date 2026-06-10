@@ -7,14 +7,16 @@
 
 import json
 import os
+import random
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (
     Flask,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -49,6 +51,77 @@ USERS = {
     "二三": {"password": "loveyy", "display_name": "二三"},
     "小六": {"password": "lovedfs", "display_name": "小六"},
 }
+CHECKIN_PLAYER_USERNAME = "小六"  # 单人模式：仅该账号可签到转盘
+CHECKIN_JAR_TARGET_POINTS = 100
+WISH_RECEIVER_USERNAME = "二三"
+WISH_NOTE_MAX_LENGTH = 200
+SPIN_REWARDS = [
+    {
+        "key": "cotton_hug",
+        "name": "棉花糖拥抱",
+        "short_name": "拥抱 +2",
+        "icon": "🤍",
+        "points": 2,
+        "weight": 22,
+    },
+    {
+        "key": "night_kiss",
+        "name": "晚安亲亲",
+        "short_name": "亲亲 +3",
+        "icon": "💋",
+        "points": 3,
+        "weight": 19,
+    },
+    {
+        "key": "cute_pass",
+        "name": "撒娇特权券",
+        "short_name": "特权 +4",
+        "icon": "🧸",
+        "points": 4,
+        "weight": 16,
+    },
+    {
+        "key": "movie_bonus",
+        "name": "电影夜加成",
+        "short_name": "电影 +5",
+        "icon": "🎬",
+        "points": 5,
+        "weight": 14,
+    },
+    {
+        "key": "milk_tea_day",
+        "name": "奶茶投喂日",
+        "short_name": "奶茶 +6",
+        "icon": "🧋",
+        "points": 6,
+        "weight": 12,
+    },
+    {
+        "key": "weekend_date",
+        "name": "周末约会奖",
+        "short_name": "约会 +8",
+        "icon": "💞",
+        "points": 8,
+        "weight": 10,
+    },
+    {
+        "key": "starlight_bonus",
+        "name": "星光双倍礼",
+        "short_name": "星光 +12",
+        "icon": "✨",
+        "points": 12,
+        "weight": 6,
+    },
+    {
+        "key": "ultimate_jackpot",
+        "name": "终极大奖·心愿成真券",
+        "short_name": "大奖 +30",
+        "icon": "🌟",
+        "points": 30,
+        "weight": 1,
+        "is_jackpot": True,
+    },
+]
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "couple-secret-key-change-me-in-production"
@@ -122,6 +195,59 @@ def init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS checkin_spin_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            reward_key TEXT NOT NULL,
+            reward_name TEXT NOT NULL,
+            reward_icon TEXT NOT NULL,
+            points INTEGER NOT NULL,
+            reward_index INTEGER NOT NULL,
+            is_jackpot INTEGER NOT NULL DEFAULT 0,
+            spin_date TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS points_jar (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            points INTEGER NOT NULL DEFAULT 0,
+            target_points INTEGER NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS checkin_wish_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_username TEXT NOT NULL,
+            sender_display_name TEXT NOT NULL,
+            receiver_username TEXT NOT NULL,
+            wish_note TEXT NOT NULL,
+            jar_points INTEGER NOT NULL,
+            jar_target_points INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_checkin_daily_user
+        ON checkin_spin_logs(username, spin_date)
+        """
+    )
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_checkin_wish_receiver_created
+        ON checkin_wish_notes(receiver_username, id DESC)
+        """
+    )
     # 初始化两个固定用户
     for username, info in USERS.items():
         row = cur.execute(
@@ -136,6 +262,12 @@ def init_db():
                     info["display_name"],
                 ),
             )
+    jar_row = cur.execute("SELECT id FROM points_jar WHERE id = 1").fetchone()
+    if jar_row is None:
+        cur.execute(
+            "INSERT INTO points_jar (id, points, target_points, updated_at) VALUES (1, 0, ?, ?)",
+            (CHECKIN_JAR_TARGET_POINTS, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
 
     db.commit()
     db.close()
@@ -178,6 +310,149 @@ def load_timeline_raw():
     except (json.JSONDecodeError, OSError):
         return []
     return events if isinstance(events, list) else []
+
+def get_checkin_player_display_name():
+    """单人签到模式参与者展示名"""
+    user_info = USERS.get(CHECKIN_PLAYER_USERNAME, {})
+    return user_info.get("display_name", CHECKIN_PLAYER_USERNAME)
+
+
+def is_checkin_player(user):
+    """当前登录用户是否为单人签到模式参与者"""
+    return bool(user) and user["username"] == CHECKIN_PLAYER_USERNAME
+
+def get_wish_receiver_display_name():
+    """心愿纸条接收者展示名"""
+    receiver_info = USERS.get(WISH_RECEIVER_USERNAME, {})
+    return receiver_info.get("display_name", WISH_RECEIVER_USERNAME)
+
+
+def is_wish_receiver(user):
+    """当前登录用户是否为心愿纸条接收账号"""
+    return bool(user) and user["username"] == WISH_RECEIVER_USERNAME
+
+
+def get_points_jar(db):
+    """读取积分罐状态并计算进度"""
+    row = db.execute(
+        "SELECT points, target_points FROM points_jar WHERE id = 1"
+    ).fetchone()
+    if row is None:
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        db.execute(
+            "INSERT INTO points_jar (id, points, target_points, updated_at) VALUES (1, 0, ?, ?)",
+            (CHECKIN_JAR_TARGET_POINTS, now_str),
+        )
+        db.commit()
+        row = db.execute(
+            "SELECT points, target_points FROM points_jar WHERE id = 1"
+        ).fetchone()
+
+    points = int(row["points"])
+    target_points = int(row["target_points"]) if row["target_points"] else CHECKIN_JAR_TARGET_POINTS
+    progress = 100.0 if target_points <= 0 else min(100.0, (points / target_points) * 100)
+    return {
+        "points": points,
+        "target_points": target_points,
+        "progress": round(progress, 1),
+        "can_redeem": points >= target_points,
+    }
+
+
+def has_user_spun_today(db, username):
+    """检查某个用户今天是否已经签到转盘"""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    row = db.execute(
+        "SELECT id FROM checkin_spin_logs WHERE username = ? AND spin_date = ? LIMIT 1",
+        (username, today_str),
+    ).fetchone()
+    return row is not None
+
+
+def build_spin_rewards_for_view():
+    """计算每个奖项的概率文案（用于展示）"""
+    total_weight = sum(item["weight"] for item in SPIN_REWARDS) or 1
+    reward_items = []
+    for idx, reward in enumerate(SPIN_REWARDS):
+        reward_items.append(
+            {
+                "index": idx,
+                "key": reward["key"],
+                "name": reward["name"],
+                "short_name": reward["short_name"],
+                "icon": reward["icon"],
+                "points": reward["points"],
+                "weight": reward["weight"],
+                "probability": round((reward["weight"] / total_weight) * 100, 1),
+                "is_jackpot": bool(reward.get("is_jackpot", False)),
+            }
+        )
+    return reward_items
+
+
+def draw_spin_reward():
+    """按权重抽取转盘奖励"""
+    reward_indexes = list(range(len(SPIN_REWARDS)))
+    reward_weights = [item["weight"] for item in SPIN_REWARDS]
+    reward_index = random.choices(reward_indexes, weights=reward_weights, k=1)[0]
+    return reward_index, SPIN_REWARDS[reward_index]
+
+
+def get_today_spin_log(db, username):
+    """读取某个用户今天的签到记录"""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    return db.execute(
+        """
+        SELECT
+            reward_key, reward_name, reward_icon, points,
+            reward_index, is_jackpot, spin_date, created_at
+        FROM checkin_spin_logs
+        WHERE username = ? AND spin_date = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (username, today_str),
+    ).fetchone()
+
+
+def normalize_checkin_history_period(period):
+    """规范化签到历史筛选周期，仅支持 week/month"""
+    period_value = (period or "").strip().lower()
+    return "week" if period_value == "week" else "month"
+
+
+def get_checkin_history_start_date(period):
+    """根据周期返回签到历史查询起始日期"""
+    today = datetime.now().date()
+    if period == "week":
+        return today - timedelta(days=today.weekday())
+    return today.replace(day=1)
+
+
+def get_checkin_history_logs(db, username, period):
+    """读取签到历史列表（按本周/本月筛选）"""
+    normalized_period = normalize_checkin_history_period(period)
+    start_date = get_checkin_history_start_date(normalized_period).strftime("%Y-%m-%d")
+    rows = db.execute(
+        """
+        SELECT reward_name, reward_icon, points, is_jackpot, created_at
+        FROM checkin_spin_logs
+        WHERE username = ? AND spin_date >= ?
+        ORDER BY id DESC
+        """,
+        (username, start_date),
+    ).fetchall()
+    logs = [
+        {
+            "reward_name": row["reward_name"],
+            "reward_icon": row["reward_icon"],
+            "points": int(row["points"]),
+            "is_jackpot": bool(row["is_jackpot"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+    return normalized_period, logs
 
 
 def login_required(view):
@@ -249,6 +524,257 @@ def index():
         love_start=LOVE_START_DATE,
         anniversary=ANNIVERSARY_DATE,
         events=events,
+    )
+
+
+@app.route("/checkin")
+@login_required
+def checkin():
+    """签到转盘页（单人模式）"""
+    db = get_db()
+    user = current_user()
+    checkin_player_name = get_checkin_player_display_name()
+    points_jar = get_points_jar(db)
+    spin_rewards = build_spin_rewards_for_view()
+    player_spun_today = has_user_spun_today(db, CHECKIN_PLAYER_USERNAME)
+    today_spin_log = get_today_spin_log(db, CHECKIN_PLAYER_USERNAME)
+    is_checkin_player_user = is_checkin_player(user)
+    can_spin = is_checkin_player_user and (not player_spun_today)
+    history_period, recent_logs = get_checkin_history_logs(
+        db, CHECKIN_PLAYER_USERNAME, "month"
+    )
+    return render_template(
+        "checkin.html",
+        user=user,
+        checkin_player_name=checkin_player_name,
+        wish_receiver_name=get_wish_receiver_display_name(),
+        wish_note_max_length=WISH_NOTE_MAX_LENGTH,
+        is_checkin_player_user=is_checkin_player_user,
+        can_spin=can_spin,
+        player_spun_today=player_spun_today,
+        today_spin_log=today_spin_log,
+        points_jar=points_jar,
+        spin_rewards=spin_rewards,
+        recent_logs=recent_logs,
+        history_period=history_period,
+    )
+
+
+@app.route("/checkin/history")
+@login_required
+def checkin_history():
+    """签到历史查询（支持本周/本月筛选）"""
+    db = get_db()
+    period, logs = get_checkin_history_logs(
+        db, CHECKIN_PLAYER_USERNAME, request.args.get("period", "month")
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "period": period,
+            "period_text": "本周" if period == "week" else "本月",
+            "logs": logs,
+        }
+    )
+
+@app.route("/checkin/wishes")
+@login_required
+def checkin_wishes():
+    """心愿纸条查询（仅接收账号可查看）"""
+    user = current_user()
+    if not is_wish_receiver(user):
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "message": f"仅 {get_wish_receiver_display_name()} 可查看心愿纸条",
+                }
+            ),
+            403,
+        )
+
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            id, sender_username, sender_display_name, wish_note,
+            jar_points, jar_target_points, created_at
+        FROM checkin_wish_notes
+        WHERE receiver_username = ?
+        ORDER BY id DESC
+        """,
+        (user["username"],),
+    ).fetchall()
+    wishes = [
+        {
+            "id": row["id"],
+            "sender_username": row["sender_username"],
+            "sender_display_name": row["sender_display_name"],
+            "wish_note": row["wish_note"],
+            "jar_points": int(row["jar_points"]),
+            "jar_target_points": int(row["jar_target_points"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+    return jsonify(
+        {
+            "ok": True,
+            "receiver_username": user["username"],
+            "receiver_display_name": user["display_name"],
+            "wishes": wishes,
+        }
+    )
+
+
+@app.route("/checkin/spin", methods=["POST"])
+@login_required
+def checkin_spin():
+    """执行一次签到转盘"""
+    user = current_user()
+    if not is_checkin_player(user):
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "message": f"当前为单人模式，仅 {get_checkin_player_display_name()} 可以签到",
+                }
+            ),
+            403,
+        )
+
+    db = get_db()
+    if has_user_spun_today(db, user["username"]):
+        return jsonify({"ok": False, "message": "今天已经签到过啦，明天再来～"}), 400
+
+    reward_index, reward = draw_spin_reward()
+    now = datetime.now()
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    today_str = now.strftime("%Y-%m-%d")
+    total_weight = sum(item["weight"] for item in SPIN_REWARDS) or 1
+
+    try:
+        get_points_jar(db)
+        db.execute(
+            """
+            INSERT INTO checkin_spin_logs (
+                username, display_name, reward_key, reward_name, reward_icon,
+                points, reward_index, is_jackpot, spin_date, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user["username"],
+                user["display_name"],
+                reward["key"],
+                reward["name"],
+                reward["icon"],
+                reward["points"],
+                reward_index,
+                1 if reward.get("is_jackpot", False) else 0,
+                today_str,
+                now_str,
+            ),
+        )
+        db.execute(
+            "UPDATE points_jar SET points = points + ?, updated_at = ? WHERE id = 1",
+            (reward["points"], now_str),
+        )
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return jsonify({"ok": False, "message": "今天已经签到过啦，明天再来～"}), 400
+
+    jar_state = get_points_jar(db)
+    return jsonify(
+        {
+            "ok": True,
+            "message": "签到成功～",
+            "reward": {
+                "index": reward_index,
+                "key": reward["key"],
+                "name": reward["name"],
+                "short_name": reward["short_name"],
+                "icon": reward["icon"],
+                "points": reward["points"],
+                "probability": round((reward["weight"] / total_weight) * 100, 1),
+                "is_jackpot": bool(reward.get("is_jackpot", False)),
+            },
+            "points_jar": jar_state,
+        }
+    )
+
+
+@app.route("/checkin/redeem", methods=["POST"])
+@login_required
+def checkin_redeem():
+    """积分罐达标后提交心愿纸条并重置积分"""
+    user = current_user()
+    if not is_checkin_player(user):
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "message": f"当前为单人模式，仅 {get_checkin_player_display_name()} 可以领取",
+                }
+            ),
+            403,
+        )
+
+    db = get_db()
+    jar_state = get_points_jar(db)
+    if not jar_state["can_redeem"]:
+        return jsonify({"ok": False, "message": "积分还没攒满，继续努力呀～"}), 400
+    request_json = request.get_json(silent=True)
+    if isinstance(request_json, dict):
+        wish_note = str(request_json.get("wish_note", "")).strip()
+    else:
+        wish_note = ""
+    if not wish_note:
+        wish_note = request.form.get("wish_note", "").strip()
+    if not wish_note:
+        return jsonify({"ok": False, "message": "请先写下心愿纸条再提交哦～"}), 400
+    if len(wish_note) > WISH_NOTE_MAX_LENGTH:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "message": f"心愿纸条最多 {WISH_NOTE_MAX_LENGTH} 字，请精简后再提交～",
+                }
+            ),
+            400,
+        )
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    receiver_name = get_wish_receiver_display_name()
+    db.execute(
+        """
+        INSERT INTO checkin_wish_notes (
+            sender_username, sender_display_name, receiver_username,
+            wish_note, jar_points, jar_target_points, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user["username"],
+            user["display_name"],
+            WISH_RECEIVER_USERNAME,
+            wish_note,
+            jar_state["points"],
+            jar_state["target_points"],
+            now_str,
+        ),
+    )
+    db.execute(
+        "UPDATE points_jar SET points = 0, updated_at = ? WHERE id = 1",
+        (now_str,),
+    )
+    db.commit()
+    new_state = get_points_jar(db)
+    return jsonify(
+        {
+            "ok": True,
+            "message": f"心愿纸条已送达 {receiver_name}，积分罐已清零，开启下一轮甜蜜积攒吧～",
+            "points_jar": new_state,
+        }
     )
 
 

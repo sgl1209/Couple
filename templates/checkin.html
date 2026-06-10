@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}签到转盘 · 我们的小窝{% endblock %}
+
+{% block content %}
+<main class="page">
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title page-title-left">每日签到转盘</h1>
+        <p class="page-sub page-sub-left">单人模式：仅 {{ checkin_player_name }} 可签到抽奖，积分攒满后填写心愿纸条送给 {{ wish_receiver_name }}</p>
+      </div>
+    </div>
+
+    <section class="checkin-layout">
+      <article
+        class="card checkin-panel"
+        id="checkin-panel"
+        data-is-player="{{ 1 if is_checkin_player_user else 0 }}"
+      >
+        <div class="checkin-mode-tip {% if is_checkin_player_user %}is-player{% else %}is-viewer{% endif %}">
+          {% if is_checkin_player_user %}
+            你是今日签到账号，可以进行转盘抽奖
+          {% else %}
+            当前为围观模式，仅 {{ checkin_player_name }} 可以执行签到
+          {% endif %}
+        </div>
+
+        <div class="checkin-jar">
+          <p class="checkin-jar-title">积分罐进度</p>
+          <p class="checkin-jar-value">
+            <strong id="checkin-points">{{ points_jar.points }}</strong>
+            <span>/</span>
+            <span id="checkin-target">{{ points_jar.target_points }}</span>
+          </p>
+          <div class="checkin-progress">
+            <span id="checkin-progress-fill" style="width: {{ points_jar.progress }}%;"></span>
+          </div>
+          <p class="checkin-progress-text">
+            当前完成 <strong id="checkin-progress-text">{{ points_jar.progress }}</strong>%。
+            {% if points_jar.can_redeem %}已满足领奖条件{% else %}继续签到就能解锁大奖{% endif %}
+          </p>
+        </div>
+
+        <div class="checkin-actions-inline">
+          <button
+            type="button"
+            class="btn btn-outline"
+            id="checkin-redeem-btn"
+            data-open-modal="checkin-redeem-modal"
+            {% if not is_checkin_player_user or not points_jar.can_redeem %}disabled{% endif %}
+          >
+            提交心愿纸条
+          </button>
+          <p id="checkin-redeem-status" class="checkin-inline-status"></p>
+        </div>
+      </article>
+
+      <article class="card checkin-wheel-card">
+        <div class="checkin-wheel-wrap">
+          <div class="checkin-wheel-pointer">▼</div>
+          <div class="checkin-wheel" id="checkin-wheel">
+            {% for reward in spin_rewards %}
+            <div
+              class="checkin-wheel-item{% if reward.is_jackpot %} is-jackpot{% endif %}"
+              style="--i: {{ loop.index0 }}; --count: {{ spin_rewards|length }};"
+              data-reward-index="{{ reward.index }}"
+            >
+              <span class="wheel-item-icon">{{ reward.icon }}</span>
+              <span class="wheel-item-name">{{ reward.short_name }}</span>
+            </div>
+            {% endfor %}
+            <div class="checkin-wheel-center">LOVE</div>
+          </div>
+        </div>
+
+        <div class="checkin-wheel-actions">
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="checkin-spin-btn"
+            {% if not can_spin %}disabled{% endif %}
+          >
+            {% if player_spun_today %}今日已签到{% else %}开始转盘{% endif %}
+          </button>
+          <p id="checkin-spin-status" class="checkin-inline-status">
+            {% if player_spun_today and today_spin_log %}
+              今日奖励：{{ today_spin_log.reward_icon }} {{ today_spin_log.reward_name }}（+{{ today_spin_log.points }}）
+            {% elif is_checkin_player_user %}
+              今天还没签到，点击按钮开始抽奖
+            {% else %}
+              你可查看奖池和签到进度
+            {% endif %}
+          </p>
+        </div>
+      </article>
+    </section>
+
+    <section class="checkin-grid mt-6">
+      <article class="card">
+        <h2 class="checkin-card-title">转盘奖池</h2>
+        <div class="checkin-reward-list">
+          {% for reward in spin_rewards %}
+          <div
+            class="checkin-reward-item{% if reward.is_jackpot %} is-jackpot{% endif %}"
+            data-reward-row="{{ reward.index }}"
+          >
+            <div class="checkin-reward-main">
+              <span class="checkin-reward-icon">{{ reward.icon }}</span>
+              <div>
+                <p class="checkin-reward-name">{{ reward.name }}</p>
+                <p class="checkin-reward-sub">{{ reward.short_name }}</p>
+              </div>
+            </div>
+            <div class="checkin-reward-meta">
+              <span class="checkin-reward-points">+{{ reward.points }}</span>
+              <span class="checkin-reward-prob">{{ reward.probability }}%</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="checkin-history-head">
+          <h2 class="checkin-card-title">
+            签到记录（{{ checkin_player_name }} · <span id="checkin-history-period-label">{% if history_period == "week" %}本周{% else %}本月{% endif %}</span>）
+          </h2>
+          <div class="checkin-history-filters" role="group" aria-label="签到历史筛选">
+            <button
+              type="button"
+              class="btn btn-outline btn-sm checkin-history-filter-btn{% if history_period == 'week' %} is-active{% endif %}"
+              data-checkin-history-period="week"
+            >
+              本周
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline btn-sm checkin-history-filter-btn{% if history_period != 'week' %} is-active{% endif %}"
+              data-checkin-history-period="month"
+            >
+              本月
+            </button>
+          </div>
+        </div>
+        <div class="checkin-history-list" id="checkin-history-list" data-history-default-period="{{ history_period }}">
+          {% for log in recent_logs %}
+          <div class="checkin-history-item{% if log.is_jackpot %} is-jackpot{% endif %}">
+            <p class="checkin-history-time">{{ log.created_at }}</p>
+            <p class="checkin-history-reward">{{ log.reward_icon }} {{ log.reward_name }} <strong>+{{ log.points }}</strong></p>
+          </div>
+          {% endfor %}
+        </div>
+        <p id="checkin-history-empty" class="checkin-empty-tip{% if recent_logs %} hidden{% endif %}">
+          当前筛选暂无签到记录，今天来转第一发吧～
+        </p>
+      </article>
+    </section>
+
+    <div id="checkin-redeem-modal" class="modal-overlay" aria-hidden="true">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 class="modal-title">提交心愿纸条</h2>
+          <button type="button" data-close-modal class="modal-close">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="checkin-redeem-modal-text">积分满罐后，写下你的心愿纸条，系统会立即送达给 {{ wish_receiver_name }}。</p>
+          <label for="checkin-wish-note-input" class="label mt-4">心愿纸条内容</label>
+          <textarea
+            id="checkin-wish-note-input"
+            class="textarea checkin-wish-note-input"
+            maxlength="{{ wish_note_max_length }}"
+            placeholder="写下这次满罐后的小心愿吧…"
+          ></textarea>
+          <p class="checkin-wish-note-tip">
+            <span id="checkin-wish-note-count">0</span>/{{ wish_note_max_length }}
+          </p>
+          <p class="checkin-redeem-modal-sub">提交后积分罐会清零并开启下一轮积攒。</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" data-close-modal class="btn btn-outline">再想想</button>
+          <button type="button" class="btn btn-primary" id="checkin-redeem-confirm-btn">提交给 {{ wish_receiver_name }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script id="checkin-rewards-data" type="application/json">{{ spin_rewards | tojson }}</script>
+{% endblock %}

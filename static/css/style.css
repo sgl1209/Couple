@@ -162,6 +162,12 @@ a {
 .btn:hover {
   transform: translateY(-1px);
 }
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 .btn-primary {
   background: linear-gradient(135deg, var(--pink-400), var(--pink-500));
   color: #fff;
@@ -862,6 +868,319 @@ a {
   .lightbox-close {
     top: 0.5rem;
     right: 0.5rem;
+  }
+}
+
+/* 签到转盘 */
+.checkin-layout {
+  display: grid;
+  gap: 1rem;
+}
+.checkin-grid {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 860px) {
+  .checkin-layout {
+    grid-template-columns: 1fr 1.2fr;
+  }
+  .checkin-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.checkin-panel,
+.checkin-wheel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.checkin-mode-tip {
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+}
+.checkin-mode-tip.is-player {
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.25);
+  color: var(--pink-500);
+}
+.checkin-mode-tip.is-viewer {
+  background: rgba(92, 74, 82, 0.06);
+  border: 1px solid rgba(92, 74, 82, 0.12);
+  color: var(--text-light);
+}
+.checkin-jar-title {
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+.checkin-jar-value {
+  margin-top: 0.35rem;
+  font-size: 1.1rem;
+}
+.checkin-jar-value strong {
+  color: var(--pink-500);
+  font-size: 1.8rem;
+}
+.checkin-progress {
+  width: 100%;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--pink-100);
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+.checkin-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--pink-400), var(--pink-500));
+  transition: width 0.35s ease;
+}
+.checkin-progress-text {
+  margin-top: 0.55rem;
+  font-size: 0.88rem;
+  color: var(--text-light);
+}
+.checkin-progress-text strong {
+  color: var(--pink-500);
+}
+.checkin-actions-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.checkin-wheel-wrap {
+  position: relative;
+  width: min(88vw, 350px);
+  margin: 0 auto;
+}
+.checkin-wheel {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 10px solid #fff;
+  box-shadow: 0 12px 30px rgba(244, 63, 94, 0.14);
+  background: radial-gradient(circle at center, #fff 0%, #fff7fb 60%, #ffe7f0 100%);
+  transition: transform 4.1s cubic-bezier(0.17, 0.85, 0.22, 1);
+}
+.checkin-wheel::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 2px dashed var(--pink-200);
+  border-radius: 50%;
+}
+.checkin-wheel-pointer {
+  position: absolute;
+  top: -0.35rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--pink-500);
+  font-size: 1.25rem;
+  z-index: 3;
+}
+.checkin-wheel-item {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 82px;
+  transform: rotate(calc(360deg / var(--count) * var(--i)))
+    translateY(-130px)
+    rotate(calc(-360deg / var(--count) * var(--i)));
+  margin-left: -41px;
+  text-align: center;
+  padding: 0.3rem 0.2rem;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--pink-200);
+  z-index: 2;
+}
+.wheel-item-icon {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.1;
+}
+.wheel-item-name {
+  display: block;
+  margin-top: 0.08rem;
+  font-size: 0.68rem;
+  color: var(--text);
+  line-height: 1.2;
+}
+.checkin-wheel-item.is-jackpot {
+  border-color: #f7b500;
+  background: linear-gradient(180deg, #fff8df 0%, #fff2c0 100%);
+}
+.checkin-wheel-item.is-active {
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.2);
+}
+.checkin-wheel-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 82px;
+  height: 82px;
+  margin-left: -41px;
+  margin-top: -41px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--pink-400), var(--pink-500));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  letter-spacing: 1px;
+  z-index: 2;
+  box-shadow: 0 8px 20px rgba(244, 63, 94, 0.28);
+}
+.checkin-wheel-actions {
+  text-align: center;
+}
+.checkin-inline-status {
+  margin-top: 0.55rem;
+  font-size: 0.88rem;
+  color: var(--text-light);
+}
+.checkin-inline-status.is-error {
+  color: #d13a45;
+}
+.checkin-card-title {
+  font-size: 1.08rem;
+  color: var(--pink-500);
+  margin-bottom: 0.75rem;
+}
+.checkin-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.checkin-history-head .checkin-card-title {
+  margin-bottom: 0;
+}
+.checkin-history-filters {
+  display: inline-flex;
+  gap: 0.45rem;
+}
+.checkin-history-filter-btn {
+  min-width: 68px;
+}
+.checkin-history-filter-btn.is-active {
+  background: linear-gradient(135deg, var(--pink-400), var(--pink-500));
+  border-color: transparent;
+  color: #fff;
+}
+.checkin-redeem-modal-text {
+  font-size: 0.94rem;
+  color: var(--text);
+  line-height: 1.7;
+}
+.checkin-wish-note-input {
+  min-height: 116px;
+}
+.checkin-wish-note-tip {
+  margin-top: 0.4rem;
+  text-align: right;
+  font-size: 0.78rem;
+  color: var(--text-light);
+}
+.checkin-redeem-modal-sub {
+  margin-top: 0.45rem;
+  font-size: 0.84rem;
+  color: var(--text-light);
+}
+.checkin-reward-list,
+.checkin-history-list {
+  display: grid;
+  gap: 0.6rem;
+}
+.checkin-reward-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--pink-100);
+  background: #fff;
+}
+.checkin-reward-item.is-jackpot {
+  border-color: #f7b500;
+  background: linear-gradient(180deg, #fffdf3 0%, #fff8df 100%);
+}
+.checkin-reward-item.is-active {
+  border-color: var(--pink-400);
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.12);
+}
+.checkin-reward-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.checkin-reward-icon {
+  font-size: 1.15rem;
+}
+.checkin-reward-name {
+  font-size: 0.9rem;
+}
+.checkin-reward-sub {
+  font-size: 0.78rem;
+  color: var(--text-light);
+}
+.checkin-reward-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.18rem;
+}
+.checkin-reward-points {
+  color: var(--pink-500);
+  font-weight: 600;
+}
+.checkin-reward-prob {
+  font-size: 0.75rem;
+  color: var(--text-light);
+}
+.checkin-history-item {
+  border: 1px dashed var(--pink-200);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--pink-50);
+}
+.checkin-history-item.is-jackpot {
+  border-color: #f7b500;
+  background: #fff8df;
+}
+.checkin-history-time {
+  font-size: 0.78rem;
+  color: var(--text-light);
+}
+.checkin-history-reward {
+  margin-top: 0.2rem;
+  font-size: 0.92rem;
+}
+.checkin-empty-tip {
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+@media (max-width: 520px) {
+  .checkin-history-filters {
+    width: 100%;
+  }
+  .checkin-history-filter-btn {
+    flex: 1;
+  }
+  .checkin-wheel-item {
+    width: 66px;
+    margin-left: -33px;
+    transform: rotate(calc(360deg / var(--count) * var(--i)))
+      translateY(-116px)
+      rotate(calc(-360deg / var(--count) * var(--i)));
+  }
+  .wheel-item-name {
+    font-size: 0.62rem;
   }
 }
 
