@@ -13,15 +13,19 @@
   {% if anniversary is defined %}data-anniversary="{{ anniversary }}"{% endif %}
 >
   {% if show_nav is not defined or show_nav %}
-  <nav class="nav">
+  <nav class="nav" id="site-nav">
     <div class="nav-inner">
-      <a href="{{ url_for('index') }}" class="nav-logo">♥ 我们的小窝</a>
+      <a href="{{ url_for('checkin') if is_nav_wish_receiver_user else url_for('index') }}" class="nav-logo">♥ 我们的小窝</a>
       <div class="nav-links">
+        {% if is_nav_wish_receiver_user %}
+        <a href="{{ url_for('checkin') }}" data-nav>签到</a>
+        {% else %}
         <a href="{{ url_for('index') }}" data-nav>首页</a>
         <a href="{{ url_for('checkin') }}" data-nav>签到</a>
         <a href="{{ url_for('photos') }}" data-nav>照片墙</a>
         <a href="{{ url_for('letters') }}" data-nav>情书墙</a>
         <a href="{{ url_for('secretdiary') }}" data-nav>心事墙</a>
+        {% endif %}
         {% if user %}
         <span class="text-center" style="font-size:0.85rem;color:var(--text-light);padding:0 0.5rem;">{{ user.display_name }}</span>
         <a href="{{ url_for('logout') }}">退出登录</a>
@@ -42,6 +46,7 @@
   </div>
   {% endif %}
   {% endwith %}
+  <div id="action-hint-toast" class="action-hint-toast" aria-live="polite" aria-atomic="true"></div>
 
   {% block content %}{% endblock %}
 

@@ -639,6 +639,31 @@ a {
   color: var(--pink-500);
   border: 1px solid var(--pink-200);
 }
+.action-hint-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translate(-50%, 12px);
+  background: rgba(92, 74, 82, 0.92);
+  color: #fff;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 260;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  max-width: calc(100vw - 2rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.action-hint-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
 
 /* 登录页 */
 .login-page {
@@ -767,22 +792,50 @@ a {
   .container {
     padding: 0 0.85rem;
   }
+  .nav.nav-mobile-auto {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    transform: translateY(-110%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+  .nav.nav-mobile-auto.is-mobile-visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
   .nav-inner {
-    padding: 0.65rem 0.85rem;
-    gap: 0.55rem;
+    padding: 0.55rem 0.75rem;
+    gap: 0.45rem;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
   .nav-links {
     width: 100%;
     gap: 0.35rem;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-links::-webkit-scrollbar {
+    display: none;
   }
   .nav-links a {
     text-align: center;
     font-size: 0.82rem;
-    padding: 0.4rem 0.2rem;
+    padding: 0.38rem 0.6rem;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  .nav-links > span {
+    white-space: nowrap;
+    flex: 0 0 auto;
+    align-self: center;
   }
   .page {
     padding: 1rem 0 2rem;
@@ -845,8 +898,9 @@ a {
   .nav-logo {
     font-size: 1rem;
   }
-  .nav-links {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .nav-links a {
+    font-size: 0.78rem;
+    padding: 0.34rem 0.52rem;
   }
   .page-title {
     font-size: 1.3rem;
@@ -1194,6 +1248,45 @@ a {
 .checkin-empty-tip {
   color: var(--text-light);
   font-size: 0.9rem;
+}
+.checkin-view-result {
+  display: grid;
+  gap: 0.3rem;
+}
+.checkin-view-result-main {
+  font-size: 1rem;
+  color: var(--text);
+}
+.checkin-view-result-main strong {
+  color: var(--pink-500);
+}
+.checkin-view-result-time {
+  font-size: 0.82rem;
+  color: var(--text-light);
+}
+.checkin-wish-list {
+  display: grid;
+  gap: 0.65rem;
+}
+.checkin-wish-item {
+  border: 1px solid var(--pink-100);
+  border-radius: 0.75rem;
+  background: var(--pink-50);
+  padding: 0.7rem 0.75rem;
+}
+.checkin-wish-meta {
+  font-size: 0.78rem;
+  color: var(--text-light);
+}
+.checkin-wish-content {
+  margin-top: 0.32rem;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+.checkin-wish-progress {
+  margin-top: 0.32rem;
+  font-size: 0.8rem;
+  color: var(--pink-500);
 }
 @keyframes checkin-wheel-orbit {
   from {

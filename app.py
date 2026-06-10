@@ -9,6 +9,7 @@ import json
 import os
 import random
 import sqlite3
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -127,6 +128,8 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "couple-secret-key-change-me-in-production"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 单张最大 8MB
+_db_init_lock = threading.Lock()
+_db_initialized = False
 
 
 # ========== 数据库 ==========
@@ -274,6 +277,23 @@ def init_db():
 
 
 # ========== 工具函数 ==========
+def ensure_db_initialized():
+    """确保数据库结构已初始化（兼容 flask run / gunicorn 等启动方式）"""
+    global _db_initialized
+    if _db_initialized:
+        return
+    with _db_init_lock:
+        if _db_initialized:
+            return
+        init_db()
+        _db_initialized = True
+
+
+@app.before_request
+def ensure_db_initialized_before_request():
+    """每个进程首个请求前确保数据库可用"""
+    ensure_db_initialized()
+
 def allowed_file(filename):
     """检查是否为允许的图片格式"""
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -455,6 +475,33 @@ def get_checkin_history_logs(db, username, period):
     return normalized_period, logs
 
 
+def get_checkin_wish_notes(db, receiver_username):
+    """读取指定接收账号的心愿纸条列表"""
+    rows = db.execute(
+        """
+        SELECT
+            id, sender_username, sender_display_name, wish_note,
+            jar_points, jar_target_points, created_at
+        FROM checkin_wish_notes
+        WHERE receiver_username = ?
+        ORDER BY id DESC
+        """,
+        (receiver_username,),
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "sender_username": row["sender_username"],
+            "sender_display_name": row["sender_display_name"],
+            "wish_note": row["wish_note"],
+            "jar_points": int(row["jar_points"]),
+            "jar_target_points": int(row["jar_target_points"]),
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
 def login_required(view):
     """登录装饰器"""
 
@@ -477,6 +524,15 @@ def current_user():
         "SELECT id, username, display_name FROM users WHERE id = ?",
         (session["user_id"],),
     ).fetchone()
+
+@app.context_processor
+def inject_user_role_flags():
+    """向模板注入账号角色标记，用于导航与页面差异展示"""
+    username = session.get("username", "")
+    return {
+        "is_nav_wish_receiver_user": username == WISH_RECEIVER_USERNAME,
+        "is_nav_checkin_player_user": username == CHECKIN_PLAYER_USERNAME,
+    }
 
 
 # ========== 路由 ==========
@@ -543,6 +599,9 @@ def checkin():
     history_period, recent_logs = get_checkin_history_logs(
         db, CHECKIN_PLAYER_USERNAME, "month"
     )
+    checkin_wish_notes = (
+        get_checkin_wish_notes(db, user["username"]) if is_wish_receiver(user) else []
+    )
     return render_template(
         "checkin.html",
         user=user,
@@ -550,6 +609,7 @@ def checkin():
         wish_receiver_name=get_wish_receiver_display_name(),
         wish_note_max_length=WISH_NOTE_MAX_LENGTH,
         is_checkin_player_user=is_checkin_player_user,
+        is_wish_receiver_user=is_wish_receiver(user),
         can_spin=can_spin,
         player_spun_today=player_spun_today,
         today_spin_log=today_spin_log,
@@ -557,6 +617,7 @@ def checkin():
         spin_rewards=spin_rewards,
         recent_logs=recent_logs,
         history_period=history_period,
+        checkin_wish_notes=checkin_wish_notes,
     )
 
 
@@ -594,29 +655,7 @@ def checkin_wishes():
         )
 
     db = get_db()
-    rows = db.execute(
-        """
-        SELECT
-            id, sender_username, sender_display_name, wish_note,
-            jar_points, jar_target_points, created_at
-        FROM checkin_wish_notes
-        WHERE receiver_username = ?
-        ORDER BY id DESC
-        """,
-        (user["username"],),
-    ).fetchall()
-    wishes = [
-        {
-            "id": row["id"],
-            "sender_username": row["sender_username"],
-            "sender_display_name": row["sender_display_name"],
-            "wish_note": row["wish_note"],
-            "jar_points": int(row["jar_points"]),
-            "jar_target_points": int(row["jar_target_points"]),
-            "created_at": row["created_at"],
-        }
-        for row in rows
-    ]
+    wishes = get_checkin_wish_notes(db, user["username"])
     return jsonify(
         {
             "ok": True,
@@ -683,6 +722,12 @@ def checkin_spin():
     except sqlite3.IntegrityError:
         db.rollback()
         return jsonify({"ok": False, "message": "今天已经签到过啦，明天再来～"}), 400
+    except sqlite3.DatabaseError:
+        db.rollback()
+        return (
+            jsonify({"ok": False, "message": "签到写入失败，请先初始化数据库后重试"}),
+            500,
+        )
 
     jar_state = get_points_jar(db)
     return jsonify(
@@ -1070,6 +1115,6 @@ def delete_timeline(event_id):
 
 # ========== 启动 ==========
 if __name__ == "__main__":
-    init_db()
+    ensure_db_initialized()
     # host=0.0.0.0 便于轻量服务器外网访问；仅本机可改为 127.0.0.1
     app.run(host="0.0.0.0", port=5000, debug=True)

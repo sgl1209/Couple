@@ -379,6 +379,77 @@
     });
   }
 
+  // ---------- 操作提示气泡 ----------
+  function initActionHintToast() {
+    var toast = document.getElementById("action-hint-toast");
+    if (!toast) return;
+
+    var hideTimer = null;
+    function showActionHint(message) {
+      var text = (message || "").trim();
+      if (!text) return;
+      toast.textContent = text;
+      toast.classList.add("show");
+      if (hideTimer) {
+        window.clearTimeout(hideTimer);
+      }
+      hideTimer = window.setTimeout(function () {
+        toast.classList.remove("show");
+      }, 1600);
+    }
+
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("button");
+      if (!btn || btn.disabled) return;
+      var hint = btn.getAttribute("data-click-hint");
+      if (hint) showActionHint(hint);
+    });
+
+    document.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form || form.tagName !== "FORM") return;
+      var submitter = e.submitter || null;
+      if (!submitter && document.activeElement && document.activeElement.form === form) {
+        submitter = document.activeElement;
+      }
+      if (submitter && submitter.disabled) return;
+      var hint =
+        (submitter && submitter.getAttribute("data-submit-hint")) ||
+        "已提交，正在处理...";
+      showActionHint(hint);
+    });
+  }
+
+  // ---------- 移动端导航：默认隐藏，回到顶部显示 ----------
+  function initMobileNavAutoShow() {
+    var nav = document.getElementById("site-nav");
+    if (!nav) return;
+    var mobileMedia = window.matchMedia("(max-width: 768px)");
+
+    function applyNavState() {
+      if (!mobileMedia.matches) {
+        nav.classList.remove("nav-mobile-auto");
+        nav.classList.remove("is-mobile-visible");
+        return;
+      }
+      nav.classList.add("nav-mobile-auto");
+      var top =
+        window.pageYOffset ||
+        document.documentElement.scrollTop ||
+        document.body.scrollTop ||
+        0;
+      nav.classList.toggle("is-mobile-visible", top <= 8);
+    }
+
+    applyNavState();
+    window.addEventListener("scroll", applyNavState, { passive: true });
+    window.addEventListener("resize", applyNavState);
+    if (typeof mobileMedia.addEventListener === "function") {
+      mobileMedia.addEventListener("change", applyNavState);
+    } else if (typeof mobileMedia.addListener === "function") {
+      mobileMedia.addListener(applyNavState);
+    }
+  }
   // ---------- 导航高亮 ----------
   function initNavActive() {
     var path = window.location.pathname;
@@ -624,6 +695,12 @@
       syncWishNoteCount();
       wishNoteInput.addEventListener("input", syncWishNoteCount);
     }
+    if (wheelWrap) {
+      wheelWrap.addEventListener("click", function () {
+        if (spinning || spinBtn.disabled) return;
+        spinBtn.click();
+      });
+    }
 
     spinBtn.addEventListener("click", function () {
       if (spinning || spinBtn.disabled) return;
@@ -766,11 +843,13 @@
   document.addEventListener("DOMContentLoaded", function () {
     initTimers();
     initModals();
+    initActionHintToast();
     initPhotoPreview();
     initHeartUploadSlots();
     initLightbox();
     initPhotoManageMode();
     initCollapsibleTextWithin(document);
+    initMobileNavAutoShow();
     initNavActive();
     initCheckinSpin();
   });
